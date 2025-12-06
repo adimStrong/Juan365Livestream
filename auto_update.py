@@ -2,16 +2,19 @@
 Master Auto-Update Script for Juan365 Livestream Dashboard
 
 This script orchestrates the complete data update workflow:
-1. Fetch API data (posts, reactions, videos, reels)
-2. Download CSV from Meta Business Suite (optional)
-3. Merge CSV files
-4. Commit and push to GitHub
-5. Streamlit Cloud auto-deploys
+1. Fetch API data from Facebook Graph API (posts, reactions, videos, reels)
+2. Merge any existing CSV files from manual exports
+3. Commit and push to GitHub
+4. Streamlit Cloud auto-deploys
+
+NOTE: CSV browser automation is disabled by default because Meta Business Suite
+blocks programmatic downloads. Use --with-csv only if manual CSV downloads are
+available in the exports/ folder.
 
 Usage:
-    python auto_update.py              # Full update (API + CSV + Git)
-    python auto_update.py --api-only   # API data only (skip CSV)
-    python auto_update.py --no-push    # Don't push to GitHub
+    python auto_update.py              # Standard update (API + Merge + Git)
+    python auto_update.py --no-push    # Update data without pushing to GitHub
+    python auto_update.py --with-csv   # Try CSV download (usually fails)
 """
 import sys
 import os
@@ -83,7 +86,10 @@ def run_script(script_name, description=None):
 
 def run_command(cmd, description=None):
     """Run a shell command and return success status"""
-    desc = description or cmd[0]
+    # Convert list to string for Windows compatibility
+    if isinstance(cmd, list):
+        cmd = ' '.join(cmd)
+    desc = description or cmd.split()[0]
     log(f"Running: {desc}...")
 
     try:
@@ -93,7 +99,7 @@ def run_command(cmd, description=None):
             capture_output=True,
             text=True,
             timeout=120,
-            shell=True if isinstance(cmd, str) else False
+            shell=True  # Always use shell=True on Windows
         )
 
         if result.returncode == 0:
@@ -165,12 +171,13 @@ def git_push():
     log("STEP 4: PUSHING TO GITHUB")
     log("=" * 60)
 
-    # Check for changes
+    # Check for changes (use shell=True on Windows)
     result = subprocess.run(
-        ['git', 'status', '--porcelain'],
+        'git status --porcelain',
         cwd=str(PROJECT_DIR),
         capture_output=True,
-        text=True
+        text=True,
+        shell=True
     )
 
     if not result.stdout.strip():
@@ -241,11 +248,13 @@ def main():
         # Step 1: Fetch API data
         results['api'] = fetch_api_data()
 
-        # Step 2: Download CSV (optional)
+        # Step 2: Download CSV (optional - disabled by default)
         if not skip_csv:
             results['csv'] = download_csv()
         else:
-            log("Skipping CSV download (--api-only or --no-csv)")
+            log("Skipping CSV download (Meta blocks automated downloads)")
+            log("  To use CSV data: manually download from Meta Business Suite")
+            log("  Then run: python merge_exports.py")
             results['csv'] = True
 
         # Step 3: Merge CSV
@@ -276,10 +285,10 @@ def main():
     log("=" * 60)
     log(f"Duration: {duration:.1f} seconds")
     log(f"Results:")
-    log(f"  API Data:    {'OK' if results['api'] else 'FAILED'}")
-    log(f"  CSV Download: {'OK' if results['csv'] else 'FAILED'}")
-    log(f"  CSV Merge:   {'OK' if results['merge'] else 'FAILED'}")
-    log(f"  Git Push:    {'OK' if results['push'] else 'FAILED'}")
+    log(f"  API Data:     {'OK' if results['api'] else 'FAILED'}")
+    log(f"  CSV Download: {'SKIPPED' if skip_csv else ('OK' if results['csv'] else 'FAILED')}")
+    log(f"  CSV Merge:    {'OK' if results['merge'] else 'FAILED'}")
+    log(f"  Git Push:     {'SKIPPED' if skip_push else ('OK' if results['push'] else 'FAILED')}")
     log("")
 
     # Exit with appropriate code

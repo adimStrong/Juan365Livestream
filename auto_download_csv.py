@@ -1,9 +1,20 @@
 """
 Auto-download CSV from Meta Business Suite using Playwright browser automation.
 
+PYAUTOGUI MOUSE CLICK APPROACH: Uses OS-level mouse clicks via pyautogui to bypass
+Meta's overlay protection that intercepts DOM events (clicks, keyboard).
+
+The strategy:
+1. Opens browser and navigates to Meta Business Suite Content Insights
+2. Uses Playwright to locate elements and get their screen coordinates
+3. Uses pyautogui to perform OS-level mouse clicks at those coordinates
+4. This bypasses React's event system completely - pyautogui clicks are real mouse events
+5. Waits for the CSV file to appear in Downloads folder
+6. Copies the CSV to the exports/ folder
+
 Usage:
     python auto_download_csv.py --setup    # First-time setup - manual login to save session
-    python auto_download_csv.py --test     # Test CSV download
+    python auto_download_csv.py --test     # Test CSV download (visible browser)
     python auto_download_csv.py            # Normal run (used by auto_update.py)
 """
 import sys
@@ -38,11 +49,8 @@ CONFIG_FILE = AUTOMATION_DIR / 'config.json'
 # Meta Business Suite URL - Content insights page
 META_INSIGHTS_URL = "https://business.facebook.com/latest/insights/content"
 
-# Page ID from config.py
-try:
-    from config import PAGE_ID
-except ImportError:
-    PAGE_ID = None
+# Page name to select (case-insensitive match)
+TARGET_PAGE_NAME = "Juan365 Live Stream"
 
 
 def log(message):
@@ -64,8 +72,7 @@ def load_config():
             return json.load(f)
     return {
         'last_export_date': None,
-        'export_days': 90,  # Default export range
-        'page_id': PAGE_ID
+        'export_days': 90,
     }
 
 
@@ -98,7 +105,7 @@ def setup_browser_session():
         # Launch browser with persistent context (saves session)
         browser = p.chromium.launch_persistent_context(
             user_data_dir=str(BROWSER_DATA_DIR),
-            headless=False,  # Show browser for manual login
+            headless=False,
             viewport={'width': 1280, 'height': 800}
         )
 
@@ -121,28 +128,106 @@ def setup_browser_session():
     return True
 
 
-def download_csv(headless=True, test_mode=False):
+def get_element_screen_coords(page, element, log_func=None):
     """
-    Download CSV from Meta Business Suite.
+    Get the screen coordinates of an element for pyautogui clicking.
+    Returns (x, y) center of the element in screen coordinates.
+
+    Uses CDP to get the exact content offset within the browser window.
+    """
+    # Get the element's bounding box relative to viewport
+    bbox = element.bounding_box()
+    if not bbox:
+        return None
+
+    # Get the browser window position and calculate viewport offset
+    # The key is to get the ACTUAL content area position on screen
+    window_info = page.evaluate('''() => {
+        return {
+            screenX: window.screenX || window.screenLeft || 0,
+            screenY: window.screenY || window.screenTop || 0,
+            outerWidth: window.outerWidth,
+            outerHeight: window.outerHeight,
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            // These give us the viewport offset within the window
+            scrollX: window.scrollX || window.pageXOffset || 0,
+            scrollY: window.scrollY || window.pageYOffset || 0,
+            devicePixelRatio: window.devicePixelRatio || 1
+        }
+    }''')
+
+    if log_func:
+        log_func(f"Window info: screenX={window_info['screenX']}, screenY={window_info['screenY']}, "
+                f"outer={window_info['outerWidth']}x{window_info['outerHeight']}, "
+                f"inner={window_info['innerWidth']}x{window_info['innerHeight']}")
+
+    # Calculate the browser chrome heights
+    # Title bar + address bar + tabs + bookmarks bar is typically ~88-120px on Windows
+    chrome_height = window_info['outerHeight'] - window_info['innerHeight']
+    chrome_width = window_info['outerWidth'] - window_info['innerWidth']  # Usually small (border width)
+
+    if log_func:
+        log_func(f"Chrome offset: width={chrome_width}, height={chrome_height}")
+        log_func(f"Element bbox: x={bbox['x']:.0f}, y={bbox['y']:.0f}, w={bbox['width']:.0f}, h={bbox['height']:.0f}")
+
+    # Calculate screen coordinates
+    # The element's bbox is relative to the viewport, so we need to add:
+    # 1. Window screen position (where window starts on screen)
+    # 2. Chrome width/height (offset from window edge to content area)
+    # 3. Element position within viewport + half size to get center
+    screen_x = window_info['screenX'] + (chrome_width // 2) + bbox['x'] + bbox['width'] / 2
+    screen_y = window_info['screenY'] + chrome_height + bbox['y'] + bbox['height'] / 2
+
+    if log_func:
+        log_func(f"Calculated screen coords: ({int(screen_x)}, {int(screen_y)})")
+
+    return (int(screen_x), int(screen_y))
+
+
+def download_csv_pyautogui_method(headless=False, test_mode=False):
+    """
+    Download CSV using pyautogui OS-level mouse clicks to bypass overlay protection.
+
+    IMPORTANT: This method requires headless=False because we need actual screen coordinates.
+    pyautogui clicks at real screen positions, so the browser must be visible.
+
+    Strategy:
+    1. Use Playwright to navigate and locate elements (get their bounding boxes)
+    2. Use pyautogui to perform OS-level mouse clicks at those screen coordinates
+    3. This completely bypasses Meta's React event interception
+
     Returns path to downloaded CSV or None if failed.
     """
     try:
         from playwright.sync_api import sync_playwright
-    except ImportError:
-        log("ERROR: Playwright not installed. Run: pip install playwright && playwright install chromium")
+        import pyautogui
+        # Disable pyautogui's fail-safe (moving mouse to corner stops script)
+        pyautogui.FAILSAFE = False
+        pyautogui.PAUSE = 0.1  # Small pause between actions
+    except ImportError as e:
+        log(f"ERROR: Missing dependency: {e}")
+        log("Run: pip install playwright pyautogui && playwright install chromium")
         return None
 
     config = load_config()
+    log("Starting CSV download using PYAUTOGUI mouse click method...")
+    log("NOTE: Browser will be VISIBLE because pyautogui needs screen coordinates")
 
-    log("Starting CSV download from Meta Business Suite...")
+    # pyautogui requires visible browser - force headless=False
+    if headless:
+        log("WARNING: Forcing headless=False for pyautogui method")
+        headless = False
 
     with sync_playwright() as p:
-        # Launch browser with saved session
+        # Launch browser with saved session - MUST be visible
+        # Position window at top-left (0,0) for predictable coordinates
         browser = p.chromium.launch_persistent_context(
             user_data_dir=str(BROWSER_DATA_DIR),
-            headless=headless,
+            headless=False,  # MUST be visible for pyautogui
             viewport={'width': 1280, 'height': 900},
-            downloads_path=str(DOWNLOADS_DIR)
+            accept_downloads=True,
+            args=['--window-position=0,0']  # Position at top-left of screen
         )
 
         page = browser.new_page()
@@ -161,223 +246,297 @@ def download_csv(headless=True, test_mode=False):
                 browser.close()
                 return None
 
-            # Check if we're on the right page
             log(f"Current URL: {page.url}")
 
-            # Wait for the content to load
-            time.sleep(3)
+            # Bring browser to foreground and ensure it's at top-left for pyautogui
+            page.bring_to_front()
+            time.sleep(0.5)
+
+            # Move mouse to a neutral position first
+            pyautogui.moveTo(100, 100)
+            time.sleep(0.5)
 
             # Take screenshot for debugging
             if test_mode:
-                screenshot_path = LOGS_DIR / f'meta_page_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                screenshot_path = LOGS_DIR / f'pyag_step0_loaded_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
                 page.screenshot(path=str(screenshot_path))
-                log(f"Screenshot saved: {screenshot_path}")
+                log(f"Screenshot: {screenshot_path}")
 
-            # Look for Export button - Meta Business Suite UI
-            # The export button is usually in the top right area
-            export_button = None
+            # Get list of existing CSVs before we trigger download
+            existing_csvs = set(f.name for f in DOWNLOADS_DIR.glob('*.csv'))
+            log(f"Existing CSVs in Downloads: {len(existing_csvs)}")
 
-            # Try different selectors for the Export button
-            export_selectors = [
-                'button:has-text("Export")',
-                '[aria-label="Export"]',
-                'div[role="button"]:has-text("Export")',
-                'span:has-text("Export")',
-                '[data-testid="export-button"]',
-            ]
+            # ============================================
+            # STEP 1: Click the Export dropdown button using pyautogui
+            # ============================================
+            log("Step 1: Finding Export dropdown button...")
 
-            for selector in export_selectors:
-                try:
-                    export_button = page.locator(selector).first
-                    if export_button.is_visible(timeout=3000):
-                        log(f"Found Export button with selector: {selector}")
-                        break
-                except:
-                    continue
+            dropdown_opened = False
 
-            if not export_button or not export_button.is_visible(timeout=5000):
-                log("WARNING: Could not find Export button. The UI may have changed.")
-                log("Taking screenshot for debugging...")
-                screenshot_path = LOGS_DIR / f'export_not_found_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-                page.screenshot(path=str(screenshot_path), full_page=True)
-                log(f"Screenshot saved: {screenshot_path}")
+            try:
+                # Find all "Open Dropdown" buttons
+                buttons = page.get_by_role("button", name="Open Dropdown").all()
+                log(f"Found {len(buttons)} 'Open Dropdown' buttons")
+
+                # Find the one near "Export data"
+                target_btn = None
+                for btn in buttons:
+                    try:
+                        # Check if this button is in a group with "Export data"
+                        parent_group = btn.locator('xpath=ancestor::div[@role="group"]').first
+                        if parent_group.count() > 0:
+                            group_text = parent_group.text_content(timeout=1000) or ""
+                            if "Export data" in group_text:
+                                target_btn = btn
+                                log("Found Export dropdown button!")
+                                break
+                    except:
+                        continue
+
+                if target_btn and target_btn.is_visible(timeout=3000):
+                    # Get element bounding box for CDP click
+                    bbox = target_btn.bounding_box()
+                    if bbox:
+                        center_x = bbox['x'] + bbox['width'] / 2
+                        center_y = bbox['y'] + bbox['height'] / 2
+                        log(f"Element center in viewport: ({center_x:.0f}, {center_y:.0f})")
+
+                        # METHOD A: Use CDP Input.dispatchMouseEvent for raw input simulation
+                        log("Trying CDP raw mouse input...")
+                        try:
+                            cdp = page.context.new_cdp_session(page)
+
+                            # Dispatch mousePressed event
+                            cdp.send('Input.dispatchMouseEvent', {
+                                'type': 'mousePressed',
+                                'x': center_x,
+                                'y': center_y,
+                                'button': 'left',
+                                'clickCount': 1
+                            })
+                            time.sleep(0.1)
+
+                            # Dispatch mouseReleased event
+                            cdp.send('Input.dispatchMouseEvent', {
+                                'type': 'mouseReleased',
+                                'x': center_x,
+                                'y': center_y,
+                                'button': 'left',
+                                'clickCount': 1
+                            })
+                            time.sleep(1.5)
+
+                            # Check if menu opened
+                            menu = page.locator('div[role="menu"]')
+                            if menu.is_visible(timeout=3000):
+                                dropdown_opened = True
+                                log("SUCCESS: Menu opened with CDP mouse event!")
+                        except Exception as e:
+                            log(f"CDP method error: {str(e)[:60]}")
+
+                        # METHOD B: Try pyautogui if CDP didn't work
+                        if not dropdown_opened:
+                            log("CDP didn't work, trying pyautogui...")
+                            coords = get_element_screen_coords(page, target_btn, log_func=log)
+                            if coords:
+                                log(f"Pyautogui coords: {coords}")
+
+                                # Ensure window is focused
+                                page.bring_to_front()
+                                time.sleep(0.3)
+
+                                # Move to position first, then click
+                                pyautogui.moveTo(coords[0], coords[1], duration=0.2)
+                                time.sleep(0.2)
+                                pyautogui.click()
+                                time.sleep(1.5)
+
+                                menu = page.locator('div[role="menu"]')
+                                if menu.is_visible(timeout=3000):
+                                    dropdown_opened = True
+                                    log("SUCCESS: Menu opened with pyautogui!")
+                                else:
+                                    log("pyautogui click didn't open menu")
+                    else:
+                        log("Could not get bounding box for dropdown button")
+                else:
+                    log("Could not find visible Export dropdown button")
+
+            except Exception as e:
+                log(f"Step 1 error: {str(e)[:80]}")
+
+            if test_mode:
+                screenshot_path = LOGS_DIR / f'pyag_step1_dropdown_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                page.screenshot(path=str(screenshot_path))
+                log(f"Screenshot: {screenshot_path}")
+
+            if not dropdown_opened:
+                log("ERROR: Could not open the dropdown menu")
                 browser.close()
                 return None
 
-            # Click Export button
-            log("Clicking Export button...")
-            export_button.click()
-            time.sleep(2)
+            # ============================================
+            # STEP 2: Click on completed export using pyautogui
+            # ============================================
+            log("Step 2: Finding and clicking completed export...")
 
-            # Wait for export dialog to appear
-            time.sleep(2)
+            download_triggered = False
 
-            # Take screenshot of dialog
-            if test_mode:
-                screenshot_path = LOGS_DIR / f'export_dialog_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-                page.screenshot(path=str(screenshot_path))
-                log(f"Export dialog screenshot: {screenshot_path}")
-
-            # The dialog has: Page dropdown, Date range, Metric presets, Options, Generate button
-            # Step 1: Select Page from dropdown - this is REQUIRED
-            log("Step 1: Selecting page from dropdown...")
             try:
-                # Click on the Page dropdown (first combobox in dialog)
-                page_dropdown = page.locator('div[role="combobox"]').first
-                page_dropdown.click(force=True)
-                time.sleep(2)
-
-                # Type to search for Juan365
-                page.keyboard.type("Juan365", delay=100)
-                time.sleep(1)
-
-                # Press down arrow and enter to select
-                page.keyboard.press("ArrowDown")
                 time.sleep(0.5)
-                page.keyboard.press("Enter")
-                log("Selected page: Juan365 Live Stream")
-                time.sleep(2)
 
-            except Exception as e:
-                log(f"WARNING: Could not select page: {e}")
+                # Find menu items
+                menu_items = page.locator('div[role="menuitem"]').all()
+                log(f"Found {len(menu_items)} menu items")
 
-            # Step 2: Select Metric presets - this is REQUIRED
-            log("Step 2: Selecting metric presets...")
-            try:
-                # Click on Metric presets dropdown
-                # It's near the text "Metric presets"
-                metric_label = page.locator('text=Metric presets')
-                if metric_label.is_visible(timeout=2000):
-                    # The dropdown should be right after this label
-                    # Click on the combobox that's near it
-                    metric_dropdown = page.locator('div[role="combobox"]').nth(1)
-                    metric_dropdown.click(force=True)
-                    time.sleep(1)
+                # Look for completed export
+                for i, item in enumerate(menu_items):
+                    try:
+                        text = item.text_content(timeout=1000) or ""
+                        log(f"Menu item {i}: {text[:60]}...")
 
-                    # Type "Published" to search
-                    page.keyboard.type("Published", delay=100)
-                    time.sleep(1)
-                    page.keyboard.press("Enter")
-                    log("Selected metric preset: Published")
-                    time.sleep(1)
+                        if 'Completed' in text and '100%' in text:
+                            log(f"Found completed export at index {i}!")
 
-            except Exception as e:
-                log(f"Note: Metric preset selection: {e}")
+                            # Get bounding box for CDP click
+                            item_bbox = item.bounding_box()
+                            if item_bbox:
+                                # Click on the LEFT side where the download icon is (not center)
+                                # The download icon is typically 20-30px from the left edge
+                                item_click_x = item_bbox['x'] + 25  # Click on download icon area
+                                item_center_y = item_bbox['y'] + item_bbox['height'] / 2
+                                log(f"Menu item bbox: x={item_bbox['x']:.0f}, y={item_bbox['y']:.0f}, w={item_bbox['width']:.0f}")
+                                log(f"Click position (left side for icon): ({item_click_x:.0f}, {item_center_y:.0f})")
 
-            # Step 3: Make sure "Post" is selected for Content level
-            log("Step 3: Ensuring Post content level...")
-            try:
-                # Look for Post radio button/option and click it
-                post_option = page.locator('text=Post').locator('xpath=ancestor::div[1]').first
-                post_option.click(force=True)
-                log("Clicked Post content level")
-                time.sleep(1)
-            except Exception as e:
-                log(f"Note: Post selection: {e}")
+                                # Use CDP to click the menu item (same method that worked for dropdown)
+                                log("Clicking menu item with CDP...")
+                                try:
+                                    cdp = page.context.new_cdp_session(page)
 
-            # Take a screenshot to see current state
-            screenshot_path = LOGS_DIR / f'before_generate_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-            page.screenshot(path=str(screenshot_path))
-            log(f"Pre-generate screenshot: {screenshot_path}")
+                                    # Dispatch mousePressed event
+                                    cdp.send('Input.dispatchMouseEvent', {
+                                        'type': 'mousePressed',
+                                        'x': item_click_x,
+                                        'y': item_center_y,
+                                        'button': 'left',
+                                        'clickCount': 1
+                                    })
+                                    time.sleep(0.1)
 
-            # Step 2: Click Generate button
-            generate_selectors = [
-                'button:has-text("Generate")',
-                'div[role="button"]:has-text("Generate")',
-                'span:has-text("Generate")',
-            ]
+                                    # Dispatch mouseReleased event
+                                    cdp.send('Input.dispatchMouseEvent', {
+                                        'type': 'mouseReleased',
+                                        'x': item_click_x,
+                                        'y': item_center_y,
+                                        'button': 'left',
+                                        'clickCount': 1
+                                    })
+                                    time.sleep(2)
 
-            generate_button = None
-            for selector in generate_selectors:
-                try:
-                    generate_button = page.locator(selector).first
-                    if generate_button.is_visible(timeout=3000):
-                        log(f"Found Generate button with selector: {selector}")
-                        break
-                except:
-                    continue
-
-            if generate_button and generate_button.is_visible(timeout=5000):
-                log("Clicking Generate button...")
-                # Check if button is enabled (not disabled)
-                is_disabled = generate_button.get_attribute('aria-disabled')
-                if is_disabled == 'true':
-                    log("WARNING: Generate button is disabled. Page may not be selected.")
-                    screenshot_path = LOGS_DIR / f'generate_disabled_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-                    page.screenshot(path=str(screenshot_path))
-                    log(f"Screenshot saved: {screenshot_path}")
-                    browser.close()
-                    return None
-                generate_button.click(force=True)
-
-                # Wait for file to be generated (can take 10-30 seconds)
-                log("Waiting for CSV to be generated (this may take 30+ seconds)...")
-                time.sleep(5)
-
-                # Now look for Download button that appears after generation
-                download_selectors = [
-                    'button:has-text("Download")',
-                    'a:has-text("Download")',
-                    'div[role="button"]:has-text("Download")',
-                    '[aria-label="Download"]',
-                ]
-
-                download_button = None
-                # Wait up to 60 seconds for download button to appear
-                for attempt in range(12):
-                    for selector in download_selectors:
-                        try:
-                            download_button = page.locator(selector).first
-                            if download_button.is_visible(timeout=2000):
-                                log(f"Found Download button with selector: {selector}")
+                                    download_triggered = True
+                                    log("CDP click sent on menu item (left side for icon)!")
+                                except Exception as e:
+                                    log(f"CDP menu click error: {str(e)[:60]}")
                                 break
-                        except:
-                            continue
-                    if download_button and download_button.is_visible(timeout=1000):
-                        break
-                    log(f"Waiting for download button... (attempt {attempt + 1}/12)")
-                    time.sleep(5)
+                            else:
+                                log("Could not get bounding box for menu item")
+                    except Exception as e:
+                        log(f"Menu item {i} error: {str(e)[:40]}")
+                        continue
 
-                if download_button and download_button.is_visible(timeout=5000):
-                    # Set up download listener
-                    with page.expect_download(timeout=60000) as download_info:
-                        download_button.click()
-                        log("Downloading CSV file...")
+            except Exception as e:
+                log(f"Step 2 error: {str(e)[:80]}")
 
-                    download = download_info.value
+            if test_mode:
+                screenshot_path = LOGS_DIR / f'pyag_step2_after_click_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                page.screenshot(path=str(screenshot_path))
+                log(f"Screenshot: {screenshot_path}")
 
-                    # Save the downloaded file
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    csv_filename = f'meta_export_{timestamp}.csv'
-                    csv_path = EXPORTS_DIR / csv_filename
+            # ============================================
+            # STEP 3: Wait for download
+            # ============================================
+            log("Step 3: Waiting for CSV file to download...")
 
-                    download.save_as(str(csv_path))
-                    log(f"CSV downloaded successfully: {csv_path}")
+            csv_path = None
+            max_wait = 60  # seconds
+            poll_interval = 2  # seconds
 
-                    # Update config
-                    config['last_export_date'] = datetime.now().isoformat()
-                    save_config(config)
+            for i in range(max_wait // poll_interval):
+                time.sleep(poll_interval)
 
-                    browser.close()
-                    return csv_path
-                else:
-                    log("WARNING: Download button did not appear after generation.")
-                    screenshot_path = LOGS_DIR / f'no_download_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-                    page.screenshot(path=str(screenshot_path), full_page=True)
-                    log(f"Screenshot saved: {screenshot_path}")
-            else:
-                log("WARNING: Could not find Generate button in export dialog.")
-                screenshot_path = LOGS_DIR / f'no_generate_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-                page.screenshot(path=str(screenshot_path), full_page=True)
-                log(f"Screenshot saved: {screenshot_path}")
+                # Check for new CSVs
+                current_csvs = set(f.name for f in DOWNLOADS_DIR.glob('*.csv'))
+                new_csvs = current_csvs - existing_csvs
+
+                if new_csvs:
+                    # Found new CSV file(s)
+                    for new_csv in new_csvs:
+                        csv_file = DOWNLOADS_DIR / new_csv
+                        # Check if it looks like a Meta export
+                        name_lower = new_csv.lower()
+                        if any(month in name_lower for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                                                                  'jul', 'aug', 'sep', 'oct', 'nov', 'dec']) or \
+                           '_' in new_csv:
+                            log(f"Found new CSV: {new_csv}")
+                            csv_path = csv_file
+                            break
+
+                if csv_path:
+                    break
+
+                log(f"Waiting for download... ({(i+1) * poll_interval}s)")
+
+            if not csv_path:
+                log("WARNING: No new CSV in Downloads folder")
+                log("Checking browser's download location...")
+
+                # Try checking the browser's default download path
+                # Also check .playwright-mcp folder
+                playwright_downloads = Path.home() / 'AppData' / 'Local' / 'Programs' / 'Git' / '.playwright-mcp'
+                if playwright_downloads.exists():
+                    pw_csvs = set(f.name for f in playwright_downloads.glob('*.csv'))
+                    for csv_name in pw_csvs:
+                        csv_file = playwright_downloads / csv_name
+                        mod_time = datetime.fromtimestamp(csv_file.stat().st_mtime)
+                        if datetime.now() - mod_time < timedelta(minutes=5):
+                            log(f"Found recent CSV in playwright folder: {csv_name}")
+                            csv_path = csv_file
+                            break
+
+            if not csv_path:
+                log("ERROR: No new CSV file found")
+                screenshot_path = LOGS_DIR / f'pyag_error_no_download_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                page.screenshot(path=str(screenshot_path))
+                browser.close()
+                return None
+
+            # ============================================
+            # STEP 4: Copy to exports folder
+            # ============================================
+            log("Step 4: Copying CSV to exports folder...")
+
+            dest_filename = csv_path.name.replace('-', '_')
+            dest_path = EXPORTS_DIR / dest_filename
+
+            if dest_path.exists():
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                stem = dest_path.stem
+                dest_path = EXPORTS_DIR / f"{stem}_{timestamp}.csv"
+
+            shutil.copy(str(csv_path), str(dest_path))
+            log(f"CSV copied to: {dest_path}")
+
+            # Update config
+            config['last_export_date'] = datetime.now().isoformat()
+            save_config(config)
 
             browser.close()
-            return None
+            return dest_path
 
         except Exception as e:
             log(f"ERROR during CSV download: {str(e)}")
             try:
-                screenshot_path = LOGS_DIR / f'error_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                screenshot_path = LOGS_DIR / f'pyag_error_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
                 page.screenshot(path=str(screenshot_path), full_page=True)
                 log(f"Error screenshot saved: {screenshot_path}")
             except:
@@ -388,27 +547,38 @@ def download_csv(headless=True, test_mode=False):
 
 def check_for_recent_downloads():
     """Check if there are recent CSV files in Downloads folder and move them"""
-    log("Checking for recent CSV downloads in Downloads folder...")
+    log("Checking for recent CSV downloads...")
 
-    # Look for Meta Business Suite CSV files in Downloads
     recent_csvs = []
+
+    # Check standard Downloads folder
     for csv_file in DOWNLOADS_DIR.glob('*.csv'):
-        # Check if file was modified in the last hour
         mod_time = datetime.fromtimestamp(csv_file.stat().st_mtime)
         if datetime.now() - mod_time < timedelta(hours=1):
-            # Check if it looks like a Meta export (contains date range in name)
-            if any(x in csv_file.name.lower() for x in ['export', 'insight', 'content', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+            name_lower = csv_file.name.lower()
+            if any(x in name_lower for x in ['export', 'insight', 'content', 'juan365',
+                                              'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                                              'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                recent_csvs.append(csv_file)
+
+    # Also check playwright downloads folder
+    playwright_downloads = Path.home() / 'AppData' / 'Local' / 'Programs' / 'Git' / '.playwright-mcp'
+    if playwright_downloads.exists():
+        for csv_file in playwright_downloads.glob('*.csv'):
+            mod_time = datetime.fromtimestamp(csv_file.stat().st_mtime)
+            if datetime.now() - mod_time < timedelta(hours=1):
                 recent_csvs.append(csv_file)
 
     if recent_csvs:
         log(f"Found {len(recent_csvs)} recent CSV file(s)")
         for csv_file in recent_csvs:
-            dest_path = EXPORTS_DIR / csv_file.name
+            dest_name = csv_file.name.replace('-', '_')
+            dest_path = EXPORTS_DIR / dest_name
             if not dest_path.exists():
-                shutil.move(str(csv_file), str(dest_path))
-                log(f"Moved: {csv_file.name} -> exports/")
+                shutil.copy(str(csv_file), str(dest_path))
+                log(f"Copied: {csv_file.name} -> exports/{dest_name}")
             else:
-                log(f"Already exists: {csv_file.name}")
+                log(f"Already exists: {dest_name}")
         return True
 
     return False
@@ -429,21 +599,22 @@ def main():
         found = check_for_recent_downloads()
         sys.exit(0 if found else 1)
 
+    # Use pyautogui method (always visible browser - required for coordinate-based clicking)
     if args.test:
-        log("=== TEST MODE ===")
-        csv_path = download_csv(headless=False, test_mode=True)
+        log("=== TEST MODE (pyautogui mouse clicks) ===")
     else:
-        csv_path = download_csv(headless=True, test_mode=False)
+        log("=== PYAUTOGUI METHOD (browser will be visible) ===")
+
+    csv_path = download_csv_pyautogui_method(headless=False, test_mode=args.test)
 
     if csv_path:
         log(f"SUCCESS: CSV downloaded to {csv_path}")
         sys.exit(0)
     else:
-        log("FAILED: Could not download CSV")
-        # Try checking downloads folder as fallback
-        log("Checking Downloads folder for manual exports...")
+        log("FAILED: pyautogui method did not work")
+        log("Checking for recent downloads as fallback...")
         if check_for_recent_downloads():
-            log("Found and moved manual CSV exports")
+            log("Found and moved recent CSV exports")
             sys.exit(0)
         sys.exit(1)
 

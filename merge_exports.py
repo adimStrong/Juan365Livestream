@@ -1,14 +1,44 @@
 """
 Auto-merge all CSV exports into a single file
-Run this after adding new CSV exports to the exports/ folder
+Automatically copies new Meta Business Suite CSVs from Downloads folder
 """
 
 import pandas as pd
+import shutil
+import re
 from pathlib import Path
 from datetime import datetime
 
+def copy_new_csvs_from_downloads():
+    """Copy Meta Business Suite CSV exports from Downloads to exports folder"""
+    downloads_dir = Path.home() / 'Downloads'
+    exports_dir = Path(__file__).parent / 'exports'
+
+    # Pattern for Meta Business Suite exports: dates with underscores/dashes and ID
+    # Examples: Nov-01-2025_Dec-06-2025_746586875138185.csv
+    meta_csv_pattern = re.compile(r'^[A-Za-z]{3}[-_]\d{2}[-_]\d{4}[-_].*\.csv$')
+
+    copied = 0
+    for csv_file in downloads_dir.glob('*.csv'):
+        # Check if it matches Meta export pattern
+        if meta_csv_pattern.match(csv_file.name):
+            dest_file = exports_dir / csv_file.name
+            if not dest_file.exists():
+                shutil.copy2(csv_file, dest_file)
+                print(f"  Copied from Downloads: {csv_file.name}")
+                copied += 1
+
+    if copied > 0:
+        print(f"  Found {copied} new CSV(s) in Downloads folder")
+    return copied
+
 def merge_exports():
     exports_dir = Path(__file__).parent / 'exports'
+
+    # First, check for new CSVs in Downloads folder
+    print("Checking Downloads folder for new Meta exports...")
+    copy_new_csvs_from_downloads()
+    print()
 
     # Find all CSV files except the merged file
     csv_files = [f for f in exports_dir.glob('*.csv') if 'MERGED' not in f.name.upper()]
