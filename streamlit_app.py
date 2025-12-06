@@ -491,7 +491,8 @@ def main():
         else:
             df = prepare_posts_dataframe(posts_data)
     else:
-        # Merge reaction data from API into CSV data (API has fresher data)
+        # Merge reaction data from API into CSV data (API has fresher/real-time data)
+        # Updated: 2025-12-06 - now updates reactions, comments, shares from API
         api_posts = posts_data.get('posts', [])
         if api_posts:
             # Create a mapping of post_id to all reaction data
