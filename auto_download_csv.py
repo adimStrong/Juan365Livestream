@@ -209,54 +209,170 @@ def download_csv(headless=True, test_mode=False):
             export_button.click()
             time.sleep(2)
 
-            # Wait for export dialog/dropdown
-            # Look for CSV option or Download button
-            csv_selectors = [
-                'button:has-text("Download")',
-                'div[role="menuitem"]:has-text("CSV")',
-                'span:has-text("Download")',
-                '[data-testid="download-csv"]',
+            # Wait for export dialog to appear
+            time.sleep(2)
+
+            # Take screenshot of dialog
+            if test_mode:
+                screenshot_path = LOGS_DIR / f'export_dialog_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                page.screenshot(path=str(screenshot_path))
+                log(f"Export dialog screenshot: {screenshot_path}")
+
+            # The dialog has: Page dropdown, Date range, Metric presets, Options, Generate button
+            # Step 1: Select Page from dropdown - this is REQUIRED
+            log("Step 1: Selecting page from dropdown...")
+            try:
+                # Click on the Page dropdown (first combobox in dialog)
+                page_dropdown = page.locator('div[role="combobox"]').first
+                page_dropdown.click(force=True)
+                time.sleep(2)
+
+                # Type to search for Juan365
+                page.keyboard.type("Juan365", delay=100)
+                time.sleep(1)
+
+                # Press down arrow and enter to select
+                page.keyboard.press("ArrowDown")
+                time.sleep(0.5)
+                page.keyboard.press("Enter")
+                log("Selected page: Juan365 Live Stream")
+                time.sleep(2)
+
+            except Exception as e:
+                log(f"WARNING: Could not select page: {e}")
+
+            # Step 2: Select Metric presets - this is REQUIRED
+            log("Step 2: Selecting metric presets...")
+            try:
+                # Click on Metric presets dropdown
+                # It's near the text "Metric presets"
+                metric_label = page.locator('text=Metric presets')
+                if metric_label.is_visible(timeout=2000):
+                    # The dropdown should be right after this label
+                    # Click on the combobox that's near it
+                    metric_dropdown = page.locator('div[role="combobox"]').nth(1)
+                    metric_dropdown.click(force=True)
+                    time.sleep(1)
+
+                    # Type "Published" to search
+                    page.keyboard.type("Published", delay=100)
+                    time.sleep(1)
+                    page.keyboard.press("Enter")
+                    log("Selected metric preset: Published")
+                    time.sleep(1)
+
+            except Exception as e:
+                log(f"Note: Metric preset selection: {e}")
+
+            # Step 3: Make sure "Post" is selected for Content level
+            log("Step 3: Ensuring Post content level...")
+            try:
+                # Look for Post radio button/option and click it
+                post_option = page.locator('text=Post').locator('xpath=ancestor::div[1]').first
+                post_option.click(force=True)
+                log("Clicked Post content level")
+                time.sleep(1)
+            except Exception as e:
+                log(f"Note: Post selection: {e}")
+
+            # Take a screenshot to see current state
+            screenshot_path = LOGS_DIR / f'before_generate_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+            page.screenshot(path=str(screenshot_path))
+            log(f"Pre-generate screenshot: {screenshot_path}")
+
+            # Step 2: Click Generate button
+            generate_selectors = [
+                'button:has-text("Generate")',
+                'div[role="button"]:has-text("Generate")',
+                'span:has-text("Generate")',
             ]
 
-            download_button = None
-            for selector in csv_selectors:
+            generate_button = None
+            for selector in generate_selectors:
                 try:
-                    download_button = page.locator(selector).first
-                    if download_button.is_visible(timeout=3000):
-                        log(f"Found Download button with selector: {selector}")
+                    generate_button = page.locator(selector).first
+                    if generate_button.is_visible(timeout=3000):
+                        log(f"Found Generate button with selector: {selector}")
                         break
                 except:
                     continue
 
-            if download_button and download_button.is_visible(timeout=5000):
-                # Set up download listener
-                with page.expect_download(timeout=60000) as download_info:
-                    download_button.click()
-                    log("Waiting for download to start...")
+            if generate_button and generate_button.is_visible(timeout=5000):
+                log("Clicking Generate button...")
+                # Check if button is enabled (not disabled)
+                is_disabled = generate_button.get_attribute('aria-disabled')
+                if is_disabled == 'true':
+                    log("WARNING: Generate button is disabled. Page may not be selected.")
+                    screenshot_path = LOGS_DIR / f'generate_disabled_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                    page.screenshot(path=str(screenshot_path))
+                    log(f"Screenshot saved: {screenshot_path}")
+                    browser.close()
+                    return None
+                generate_button.click(force=True)
 
-                download = download_info.value
+                # Wait for file to be generated (can take 10-30 seconds)
+                log("Waiting for CSV to be generated (this may take 30+ seconds)...")
+                time.sleep(5)
 
-                # Save the downloaded file
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                csv_filename = f'meta_export_{timestamp}.csv'
-                csv_path = EXPORTS_DIR / csv_filename
+                # Now look for Download button that appears after generation
+                download_selectors = [
+                    'button:has-text("Download")',
+                    'a:has-text("Download")',
+                    'div[role="button"]:has-text("Download")',
+                    '[aria-label="Download"]',
+                ]
 
-                download.save_as(str(csv_path))
-                log(f"CSV downloaded successfully: {csv_path}")
+                download_button = None
+                # Wait up to 60 seconds for download button to appear
+                for attempt in range(12):
+                    for selector in download_selectors:
+                        try:
+                            download_button = page.locator(selector).first
+                            if download_button.is_visible(timeout=2000):
+                                log(f"Found Download button with selector: {selector}")
+                                break
+                        except:
+                            continue
+                    if download_button and download_button.is_visible(timeout=1000):
+                        break
+                    log(f"Waiting for download button... (attempt {attempt + 1}/12)")
+                    time.sleep(5)
 
-                # Update config
-                config['last_export_date'] = datetime.now().isoformat()
-                save_config(config)
+                if download_button and download_button.is_visible(timeout=5000):
+                    # Set up download listener
+                    with page.expect_download(timeout=60000) as download_info:
+                        download_button.click()
+                        log("Downloading CSV file...")
 
-                browser.close()
-                return csv_path
+                    download = download_info.value
+
+                    # Save the downloaded file
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    csv_filename = f'meta_export_{timestamp}.csv'
+                    csv_path = EXPORTS_DIR / csv_filename
+
+                    download.save_as(str(csv_path))
+                    log(f"CSV downloaded successfully: {csv_path}")
+
+                    # Update config
+                    config['last_export_date'] = datetime.now().isoformat()
+                    save_config(config)
+
+                    browser.close()
+                    return csv_path
+                else:
+                    log("WARNING: Download button did not appear after generation.")
+                    screenshot_path = LOGS_DIR / f'no_download_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                    page.screenshot(path=str(screenshot_path), full_page=True)
+                    log(f"Screenshot saved: {screenshot_path}")
             else:
-                log("WARNING: Could not find Download/CSV button in export dialog.")
-                screenshot_path = LOGS_DIR / f'download_not_found_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+                log("WARNING: Could not find Generate button in export dialog.")
+                screenshot_path = LOGS_DIR / f'no_generate_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
                 page.screenshot(path=str(screenshot_path), full_page=True)
                 log(f"Screenshot saved: {screenshot_path}")
-                browser.close()
-                return None
+
+            browser.close()
+            return None
 
         except Exception as e:
             log(f"ERROR during CSV download: {str(e)}")

@@ -295,12 +295,12 @@ def main():
     angry_total = sum(p.get('angry', 0) for p in processed_posts)
 
     print(f"\nReaction breakdown:")
-    print(f"  👍 Like: {like_total:,}")
-    print(f"  ❤️ Love: {love_total:,}")
-    print(f"  😆 Haha: {haha_total:,}")
-    print(f"  😮 Wow: {wow_total:,}")
-    print(f"  😢 Sad: {sad_total:,}")
-    print(f"  😠 Angry: {angry_total:,}")
+    print(f"  Like: {like_total:,}")
+    print(f"  Love: {love_total:,}")
+    print(f"  Haha: {haha_total:,}")
+    print(f"  Wow: {wow_total:,}")
+    print(f"  Sad: {sad_total:,}")
+    print(f"  Angry: {angry_total:,}")
 
     print(f"\nFinished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 

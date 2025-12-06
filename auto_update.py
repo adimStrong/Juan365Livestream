@@ -212,9 +212,12 @@ def main():
     parser.add_argument('--api-only', action='store_true', help='Skip CSV download')
     parser.add_argument('--no-push', action='store_true', help='Skip git push')
     parser.add_argument('--no-csv', action='store_true', help='Skip CSV download (alias for --api-only)')
+    parser.add_argument('--with-csv', action='store_true', help='Try CSV download (browser automation may not work)')
     args = parser.parse_args()
 
-    skip_csv = args.api_only or args.no_csv
+    # Default: skip CSV because Meta Business Suite automation is unreliable
+    # Use --with-csv to try CSV download
+    skip_csv = not args.with_csv or args.api_only or args.no_csv
     skip_push = args.no_push
 
     # Start
