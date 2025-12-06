@@ -1,6 +1,7 @@
 """
 Auto-merge all CSV exports into a single file
 Automatically copies new Meta Business Suite CSVs from Downloads folder
+IMPORTANT: Only includes data from Juan365 Live Stream page (ID: 61569634500241)
 """
 
 import pandas as pd
@@ -8,6 +9,10 @@ import shutil
 import re
 from pathlib import Path
 from datetime import datetime
+
+# Target page - Juan365 Live Stream
+TARGET_PAGE_ID = "61569634500241"
+TARGET_PAGE_NAME = "Juan365 Live Stream"
 
 def copy_new_csvs_from_downloads():
     """Copy Meta Business Suite CSV exports from Downloads to exports folder"""
@@ -51,15 +56,37 @@ def merge_exports():
     for f in csv_files:
         print(f"  - {f.name}")
 
-    # Read and combine all CSVs
+    # Read and combine all CSVs (only from target page)
     all_dfs = []
+    skipped_wrong_page = 0
     for csv_file in csv_files:
         try:
             df = pd.read_csv(csv_file)
-            print(f"  Loaded {len(df)} rows from {csv_file.name}")
+
+            # Filter to only include rows from target page
+            if 'Page ID' in df.columns:
+                df['Page ID'] = df['Page ID'].astype(str)
+                original_count = len(df)
+                df = df[df['Page ID'] == TARGET_PAGE_ID]
+                filtered_count = len(df)
+
+                if filtered_count == 0:
+                    print(f"  SKIPPED {csv_file.name} (wrong page)")
+                    skipped_wrong_page += 1
+                    continue
+                elif filtered_count < original_count:
+                    print(f"  Loaded {filtered_count} rows from {csv_file.name} (filtered from {original_count})")
+                else:
+                    print(f"  Loaded {len(df)} rows from {csv_file.name}")
+            else:
+                print(f"  Loaded {len(df)} rows from {csv_file.name}")
+
             all_dfs.append(df)
         except Exception as e:
             print(f"  Error reading {csv_file.name}: {e}")
+
+    if skipped_wrong_page > 0:
+        print(f"\n  Note: Skipped {skipped_wrong_page} CSV(s) from other pages")
 
     if not all_dfs:
         print("No data loaded")
