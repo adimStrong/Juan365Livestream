@@ -5,7 +5,7 @@ config.py
 
 # Data files (large, local only)
 data/
-exports/
+# exports/ folder is needed for Views/Reach data
 
 # Python cache
 __pycache__/
