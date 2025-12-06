@@ -22,3 +22,10 @@ __pycache__/
 
 # Backups
 exports/backups/
+
+# Automation (browser session data - contains login cookies)
+automation/browser_data/
+automation/cookies.json
+
+# Logs
+logs/
