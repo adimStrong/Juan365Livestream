@@ -355,6 +355,11 @@ def load_csv_data():
 
     df = pd.read_csv(csv_path)
 
+    # Filter to only Juan365 Live Stream page (ID: 61569634500241)
+    if 'Page ID' in df.columns:
+        df['Page ID'] = df['Page ID'].astype(str)
+        df = df[df['Page ID'] == '61569634500241']
+
     column_mapping = {
         'Post ID': 'post_id', 'Title': 'message', 'Publish time': 'publish_time',
         'Post type': 'post_type', 'Permalink': 'permalink',
