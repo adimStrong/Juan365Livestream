@@ -9,6 +9,9 @@ REM 4. Fetches API data
 REM 5. Pushes to GitHub
 REM ============================================
 
+REM Set Git path
+set GIT_PATH=C:\Users\us\AppData\Local\Programs\Git\cmd\git.exe
+
 echo.
 echo ============================================
 echo  JUAN365 DAILY UPDATE
@@ -39,9 +42,9 @@ python refresh_api_cache.py
 
 echo.
 echo STEP 4: Pushing to GitHub...
-git add api_cache/ exports/
-git commit -m "Daily update: %date%"
-git push origin main
+"%GIT_PATH%" add api_cache/ exports/
+"%GIT_PATH%" commit -m "Daily update: %date%"
+"%GIT_PATH%" push origin main
 
 echo.
 echo ============================================
