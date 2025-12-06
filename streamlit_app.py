@@ -929,27 +929,56 @@ def main():
     if not daily_posts.empty:
         daily_posts.rename(columns={'post_id': 'post_count'}, inplace=True)
 
-    # Videos
-    videos_df = filtered_df[filtered_df['post_type_clean'] == 'Videos']
-    daily_videos = videos_df.groupby('date').agg({
-        'reactions': 'sum',
-        'comments': 'sum',
-        'shares': 'sum',
-        'post_id': 'count'
-    }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-    if not daily_videos.empty:
-        daily_videos.rename(columns={'post_id': 'post_count'}, inplace=True)
+    # Videos and Reels: Use API data (all_posts_data) which has complete data including December
+    # CSV data may not have recent Videos/Reels, so we use API data for these charts
+    api_df = prepare_posts_dataframe(all_posts_data) if all_posts_data.get('posts') else None
 
-    # Reels
-    reels_df = filtered_df[filtered_df['post_type_clean'] == 'Reels']
-    daily_reels = reels_df.groupby('date').agg({
-        'reactions': 'sum',
-        'comments': 'sum',
-        'shares': 'sum',
-        'post_id': 'count'
-    }).reset_index() if not reels_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-    if not daily_reels.empty:
-        daily_reels.rename(columns={'post_id': 'post_count'}, inplace=True)
+    if api_df is not None and not api_df.empty:
+        # Apply same date filter as filtered_df
+        api_filtered = api_df[(api_df['date'] >= start_date) & (api_df['date'] <= end_date)]
+
+        # Videos from API data
+        videos_df = api_filtered[api_filtered['post_type_clean'] == 'Videos']
+        daily_videos = videos_df.groupby('date').agg({
+            'reactions': 'sum',
+            'comments': 'sum',
+            'shares': 'sum',
+            'id': 'count'
+        }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+        if not daily_videos.empty:
+            daily_videos.rename(columns={'id': 'post_count'}, inplace=True)
+
+        # Reels from API data
+        reels_df = api_filtered[api_filtered['post_type_clean'] == 'Reels']
+        daily_reels = reels_df.groupby('date').agg({
+            'reactions': 'sum',
+            'comments': 'sum',
+            'shares': 'sum',
+            'id': 'count'
+        }).reset_index() if not reels_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+        if not daily_reels.empty:
+            daily_reels.rename(columns={'id': 'post_count'}, inplace=True)
+    else:
+        # Fallback to CSV data if API data not available
+        videos_df = filtered_df[filtered_df['post_type_clean'] == 'Videos']
+        daily_videos = videos_df.groupby('date').agg({
+            'reactions': 'sum',
+            'comments': 'sum',
+            'shares': 'sum',
+            'post_id': 'count'
+        }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+        if not daily_videos.empty:
+            daily_videos.rename(columns={'post_id': 'post_count'}, inplace=True)
+
+        reels_df = filtered_df[filtered_df['post_type_clean'] == 'Reels']
+        daily_reels = reels_df.groupby('date').agg({
+            'reactions': 'sum',
+            'comments': 'sum',
+            'shares': 'sum',
+            'post_id': 'count'
+        }).reset_index() if not reels_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+        if not daily_reels.empty:
+            daily_reels.rename(columns={'post_id': 'post_count'}, inplace=True)
 
     # Create 4 charts in 2x2 grid
     col1, col2 = st.columns(2)
