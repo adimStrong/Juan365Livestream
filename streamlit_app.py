@@ -491,31 +491,45 @@ def main():
         else:
             df = prepare_posts_dataframe(posts_data)
     else:
-        # Merge reaction breakdown from API into CSV data
+        # Merge reaction data from API into CSV data (API has fresher data)
         api_posts = posts_data.get('posts', [])
         if api_posts:
-            # Create a mapping of post_id to reaction data
+            # Create a mapping of post_id to all reaction data
             reaction_cols = ['like', 'love', 'haha', 'wow', 'sad', 'angry']
+            engagement_cols = ['reactions', 'comments', 'shares', 'engagement']
+            all_cols = reaction_cols + engagement_cols
             api_reactions = {}
             for post in api_posts:
                 # API uses full ID like "580104038511364_122169709076762707"
                 # CSV might use just the second part
                 post_id = post.get('id', '')
                 short_id = post_id.split('_')[-1] if '_' in post_id else post_id
-                api_reactions[post_id] = {col: post.get(col, 0) for col in reaction_cols}
-                api_reactions[short_id] = {col: post.get(col, 0) for col in reaction_cols}
+                post_data = {col: post.get(col, 0) for col in all_cols}
+                api_reactions[post_id] = post_data
+                api_reactions[short_id] = post_data
 
-            # Add reaction columns to df if not present
-            for col in reaction_cols:
+            # Add columns to df if not present
+            for col in all_cols:
                 if col not in df.columns:
                     df[col] = 0
 
-            # Match and update reaction data
+            # Match and update data from API (fresher data)
             for idx, row in df.iterrows():
                 csv_post_id = str(row.get('post_id', ''))
                 if csv_post_id in api_reactions:
+                    api_data = api_reactions[csv_post_id]
+                    # Update reaction breakdown
                     for col in reaction_cols:
-                        df.at[idx, col] = api_reactions[csv_post_id].get(col, 0)
+                        df.at[idx, col] = api_data.get(col, 0)
+                    # Update reactions/comments/shares if API has them (more current)
+                    if api_data.get('reactions', 0) > 0:
+                        df.at[idx, 'reactions'] = api_data['reactions']
+                    if api_data.get('comments', 0) > 0:
+                        df.at[idx, 'comments'] = api_data['comments']
+                    if api_data.get('shares', 0) > 0:
+                        df.at[idx, 'shares'] = api_data['shares']
+                    # Recalculate engagement
+                    df.at[idx, 'engagement'] = df.at[idx, 'reactions'] + df.at[idx, 'comments'] + df.at[idx, 'shares']
 
     # Header
     if logo_base64:
