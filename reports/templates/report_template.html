@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_name }} - Social Media Report</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4361EE;
+            --primary-dark: #3651D4;
+            --primary-light: #EEF2FF;
+            --secondary: #06D6A0;
+            --secondary-light: #ECFDF5;
+            --warning: #F59E0B;
+            --warning-light: #FEF3C7;
+            --danger: #EF4444;
+            --danger-light: #FEE2E2;
+            --purple: #8B5CF6;
+            --purple-light: #F3E8FF;
+            --pink: #EC4899;
+            --pink-light: #FCE7F3;
+            --dark: #0F172A;
+            --gray-900: #1E293B;
+            --gray-700: #334155;
+            --gray-600: #475569;
+            --gray-500: #64748B;
+            --gray-400: #94A3B8;
+            --gray-300: #CBD5E1;
+            --gray-200: #E2E8F0;
+            --gray-100: #F1F5F9;
+            --gray-50: #F8FAFC;
+            --white: #FFFFFF;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%);
+            color: var(--gray-900);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            padding: 48px 32px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+            border-radius: 24px;
+            color: var(--white);
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+        }
+
+        .header h1 {
+            font-size: 2.75rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+            position: relative;
+            letter-spacing: -0.02em;
+        }
+
+        .header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            font-weight: 400;
+            position: relative;
+        }
+
+        .header .date-range {
+            margin-top: 24px;
+            padding: 12px 28px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 50px;
+            display: inline-block;
+            font-size: 0.95rem;
+            font-weight: 500;
+            position: relative;
+        }
+
+        /* Global Filter Bar */
+        .global-filter {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 24px 28px;
+            margin-bottom: 32px;
+            box-shadow: var(--shadow-md);
+            border: 2px solid var(--primary-light);
+            position: sticky;
+            top: 10px;
+            z-index: 100;
+        }
+
+        .global-filter-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .global-filter-title .icon {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .filter-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .filter-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--gray-600);
+            min-width: 100px;
+        }
+
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            padding: 10px 18px;
+            border: 2px solid var(--gray-200);
+            border-radius: 10px;
+            background: var(--white);
+            color: var(--gray-600);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .filter-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: var(--white);
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+        }
+
+        .filter-btn .count {
+            margin-left: 6px;
+            opacity: 0.8;
+            font-weight: 400;
+        }
+
+        .date-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .date-input {
+            padding: 10px 14px;
+            border: 2px solid var(--gray-200);
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            color: var(--gray-900);
+            transition: all 0.2s ease;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--gray-100);
+            color: var(--gray-600);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-200);
+        }
+
+        .filter-summary {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--purple-light) 100%);
+            border-radius: 12px;
+            margin-top: 16px;
+        }
+
+        .filter-summary-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-summary-item .label {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+        }
+
+        .filter-summary-item .value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .kpi-card {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 24px 20px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-100);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gray-200);
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .kpi-card .value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.2;
+        }
+
+        .kpi-card .label {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .kpi-card.primary::before { background: linear-gradient(90deg, var(--primary), var(--purple)); }
+        .kpi-card.primary .value { color: var(--primary); }
+
+        .kpi-card.success::before { background: var(--secondary); }
+        .kpi-card.success .value { color: var(--secondary); }
+
+        .kpi-card.warning::before { background: var(--warning); }
+        .kpi-card.warning .value { color: var(--warning); }
+
+        .kpi-card.pink::before { background: var(--pink); }
+        .kpi-card.pink .value { color: var(--pink); }
+
+        /* Section */
+        .section {
+            margin-bottom: 32px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title .icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .section-title .icon.blue { background: var(--primary-light); color: var(--primary); }
+        .section-title .icon.green { background: var(--secondary-light); color: var(--secondary); }
+        .section-title .icon.purple { background: var(--purple-light); color: var(--purple); }
+        .section-title .icon.pink { background: var(--pink-light); color: var(--pink); }
+        .section-title .icon.orange { background: var(--warning-light); color: var(--warning); }
+
+        /* Post Type Cards */
+        .post-type-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .post-type-card {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-100);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .post-type-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .post-type-card.hidden {
+            display: none;
+        }
+
+        .post-type-card .type-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .post-type-card .type-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .post-type-card .type-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--gray-900);
+        }
+
+        .post-type-card .type-count {
+            font-size: 0.85rem;
+            color: var(--gray-500);
+        }
+
+        .post-type-card .type-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .post-type-card .stat-item {
+            background: var(--gray-50);
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .post-type-card .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .post-type-card .stat-label {
+            font-size: 0.7rem;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        /* Post type colors */
+        .post-type-card.photo .type-icon { background: #DBEAFE; color: #2563EB; }
+        .post-type-card.photo { border-left: 4px solid #2563EB; }
+
+        .post-type-card.video .type-icon { background: #FEE2E2; color: #DC2626; }
+        .post-type-card.video { border-left: 4px solid #DC2626; }
+
+        .post-type-card.reel .type-icon { background: #FCE7F3; color: #DB2777; }
+        .post-type-card.reel { border-left: 4px solid #DB2777; }
+
+        .post-type-card.live .type-icon { background: #D1FAE5; color: #059669; }
+        .post-type-card.live { border-left: 4px solid #059669; }
+
+        .post-type-card.text .type-icon { background: #F3E8FF; color: #7C3AED; }
+        .post-type-card.text { border-left: 4px solid #7C3AED; }
+
+        .post-type-card.other .type-icon { background: #F1F5F9; color: #64748B; }
+        .post-type-card.other { border-left: 4px solid #64748B; }
+
+        /* Weekly/Monthly Performance Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .metrics-card {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-100);
+        }
+
+        .metrics-card h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--gray-900);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .metrics-card h3 .badge {
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .metrics-card h3 .badge.weekly {
+            background: var(--secondary-light);
+            color: var(--secondary);
+        }
+
+        .metrics-card h3 .badge.monthly {
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+
+        .period-row {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            margin-bottom: 8px;
+            background: var(--gray-50);
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .period-row:hover {
+            background: var(--gray-100);
+        }
+
+        .period-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .period-info {
+            flex: 1;
+        }
+
+        .period-label {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--gray-900);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .period-label .week-num {
+            background: linear-gradient(135deg, var(--secondary) 0%, #10B981 100%);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .period-dates {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            margin-top: 2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .period-dates .date-badge {
+            background: var(--white);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            border: 1px solid var(--gray-200);
+        }
+
+        .period-dates .active-badge {
+            background: var(--secondary-light);
+            color: var(--secondary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .period-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .period-stat {
+            text-align: right;
+            min-width: 70px;
+        }
+
+        .period-stat .value {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--gray-900);
+        }
+
+        .period-stat .label {
+            font-size: 0.65rem;
+            color: var(--gray-400);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        /* Charts */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .chart-card {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-100);
+        }
+
+        .chart-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--gray-900);
+        }
+
+        /* Tables */
+        .table-card {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-100);
+            margin-bottom: 24px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+        }
+
+        th {
+            background: var(--gray-50);
+            font-weight: 600;
+            color: var(--gray-600);
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        tbody tr {
+            border-bottom: 1px solid var(--gray-100);
+        }
+
+        tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background: var(--gray-50);
+        }
+
+        td.number {
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            font-weight: 500;
+        }
+
+        .highlight-row {
+            background: linear-gradient(90deg, var(--primary-light) 0%, var(--white) 100%);
+        }
+
+        .highlight-row td:first-child {
+            position: relative;
+        }
+
+        .highlight-row td:first-child::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--primary);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-photo { background: #DBEAFE; color: #1D4ED8; }
+        .badge-video { background: #FEE2E2; color: #DC2626; }
+        .badge-reel { background: #FCE7F3; color: #DB2777; }
+        .badge-live { background: #D1FAE5; color: #059669; }
+        .badge-text { background: #F3E8FF; color: #7C3AED; }
+        .badge-other { background: #F1F5F9; color: #64748B; }
+
+        .badge-best {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+            color: white;
+            font-size: 0.65rem;
+            padding: 4px 8px;
+            margin-left: 8px;
+        }
+
+        /* Posts Table */
+        .posts-table-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .message-cell {
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--gray-600);
+        }
+
+        /* Links */
+        a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 32px;
+            color: var(--gray-400);
+            font-size: 0.85rem;
+        }
+
+        .footer strong {
+            color: var(--gray-600);
+        }
+
+        /* Loading spinner */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--gray-400);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+            .chart-grid { grid-template-columns: 1fr; }
+            .metrics-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.75rem; }
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .post-type-grid { grid-template-columns: 1fr; }
+            th, td { padding: 10px 12px; }
+            .filter-row { flex-direction: column; align-items: flex-start; }
+            .date-inputs { flex-wrap: wrap; }
+            .period-stats { gap: 12px; }
+            .global-filter { position: static; }
+            .filter-summary { flex-direction: column; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>{{ page_name }}</h1>
+            <p class="subtitle">Social Media Performance Report</p>
+            <div class="date-range" id="headerDateRange">
+                📅 {{ date_range_start }} — {{ date_range_end }} • {{ total_posts }} posts analyzed
+            </div>
+        </header>
+
+        <!-- Global Filter Bar -->
+        <div class="global-filter">
+            <div class="global-filter-title">
+                <span class="icon">🎛️ FILTER</span>
+                Filter Entire Dashboard
+            </div>
+            <div class="filter-row">
+                <span class="filter-label">Post Type:</span>
+                <div class="filter-bar" id="globalTypeFilters">
+                    <button class="filter-btn active" data-filter="all">All <span class="count" id="countAll">({{ total_posts }})</span></button>
+                    {% for pt in post_types %}
+                    <button class="filter-btn" data-filter="{{ pt.type|lower }}">
+                        {% if pt.type == 'Photo' %}📷{% elif pt.type == 'Video' %}🎬{% elif pt.type == 'Reel' %}🎞️{% elif pt.type == 'Live' %}🔴{% elif pt.type == 'Text' %}📝{% else %}📄{% endif %}
+                        {{ pt.type }} <span class="count" id="count{{ pt.type }}">({{ pt.count }})</span>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="filter-row">
+                <span class="filter-label">Date Range:</span>
+                <div class="date-inputs">
+                    <input type="date" id="globalStartDate" class="date-input" value="{{ date_range_start }}">
+                    <span style="color: var(--gray-400);">to</span>
+                    <input type="date" id="globalEndDate" class="date-input" value="{{ date_range_end }}">
+                    <button class="btn btn-primary" onclick="applyGlobalFilter()">Apply Filter</button>
+                    <button class="btn btn-secondary" onclick="resetGlobalFilter()">Reset All</button>
+                </div>
+            </div>
+            <div class="filter-summary" id="filterSummary">
+                <div class="filter-summary-item">
+                    <span class="label">Posts:</span>
+                    <span class="value" id="summaryPosts">{{ total_posts }}</span>
+                </div>
+                <div class="filter-summary-item">
+                    <span class="label">Engagement:</span>
+                    <span class="value" id="summaryEngagement">{{ "{:,}".format(total_engagement) }}</span>
+                </div>
+                <div class="filter-summary-item">
+                    <span class="label">Avg/Post:</span>
+                    <span class="value" id="summaryAvg">{{ "%.1f"|format(avg_engagement) }}</span>
+                </div>
+                <div class="filter-summary-item">
+                    <span class="label">Date Range:</span>
+                    <span class="value" id="summaryDateRange" style="font-size: 0.9rem;">{{ date_range_start }} to {{ date_range_end }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="value" id="kpiTotalPosts">{{ "{:,}".format(total_posts) }}</div>
+                <div class="label">Total Posts</div>
+            </div>
+            <div class="kpi-card primary">
+                <div class="value" id="kpiTotalEngagement">{{ "{:,}".format(total_engagement) }}</div>
+                <div class="label">Total Engagement</div>
+            </div>
+            <div class="kpi-card">
+                <div class="value" id="kpiAvgEngagement">{{ "%.1f"|format(avg_engagement) }}</div>
+                <div class="label">Avg per Post</div>
+            </div>
+            <div class="kpi-card success">
+                <div class="value" id="kpiReactions">{{ "{:,}".format(total_reactions) }}</div>
+                <div class="label">Reactions</div>
+            </div>
+            <div class="kpi-card warning">
+                <div class="value" id="kpiComments">{{ "{:,}".format(total_comments) }}</div>
+                <div class="label">Comments</div>
+            </div>
+            <div class="kpi-card pink">
+                <div class="value" id="kpiShares">{{ "{:,}".format(total_shares) }}</div>
+                <div class="label">Shares</div>
+            </div>
+        </div>
+
+        <!-- Post Type Analysis - Card Style -->
+        <section class="section" id="postTypeSection">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span class="icon blue">📊</span>
+                    Content Performance by Type
+                </h2>
+            </div>
+            <div class="post-type-grid" id="postTypeGrid">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </section>
+
+        <!-- Weekly/Monthly Performance -->
+        <div class="metrics-grid">
+            <!-- Weekly Performance -->
+            <div class="metrics-card">
+                <h3>
+                    <span class="badge weekly">WEEKLY</span>
+                    Performance Breakdown
+                </h3>
+                <div id="weeklyMetrics">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Monthly Performance -->
+            <div class="metrics-card">
+                <h3>
+                    <span class="badge monthly">MONTHLY</span>
+                    Performance Breakdown
+                </h3>
+                <div id="monthlyMetrics">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>📈 Daily Engagement Trend</h3>
+                <canvas id="dailyChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>📊 Monthly Comparison</h3>
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>🎯 Content Distribution</h3>
+                <canvas id="typeChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>📅 Weekly Engagement</h3>
+                <canvas id="weeklyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Best Posting Times -->
+        <div class="chart-grid">
+            <div class="table-card">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span class="icon green">📆</span>
+                        Best Posting Days
+                    </h2>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Day</th>
+                                <th>Posts</th>
+                                <th>Total Engagement</th>
+                                <th>Avg Engagement</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dayOfWeekTable">
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span class="icon orange">⏰</span>
+                        Best Posting Times
+                    </h2>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time Slot</th>
+                                <th>Posts</th>
+                                <th>Total Engagement</th>
+                                <th>Avg Engagement</th>
+                            </tr>
+                        </thead>
+                        <tbody id="timeSlotTable">
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Posts -->
+        <div class="table-card">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span class="icon purple">🏆</span>
+                    Top 15 Performing Posts
+                </h2>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Message</th>
+                            <th>Reactions</th>
+                            <th>Comments</th>
+                            <th>Shares</th>
+                            <th>Engagement</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topPostsTable">
+                        <!-- Will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- All Posts -->
+        <div class="table-card">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span class="icon pink">📋</span>
+                    All Posts
+                </h2>
+            </div>
+            <div class="table-container posts-table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Message</th>
+                            <th>Reactions</th>
+                            <th>Comments</th>
+                            <th>Shares</th>
+                            <th>Engagement</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allPostsTable">
+                        <!-- Will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Generated on <strong>{{ generated_at }}</strong> • Data from Meta Business Suite Export</p>
+        </footer>
+    </div>
+
+    <script>
+        // =====================================================
+        // ALL POST DATA (embedded from Python)
+        // =====================================================
+        const allPostsData = {{ all_posts | tojson }};
+        const originalDateRangeStart = '{{ date_range_start }}';
+        const originalDateRangeEnd = '{{ date_range_end }}';
+
+        // =====================================================
+        // CHART INSTANCES (for updating)
+        // =====================================================
+        let dailyChartInstance, monthlyChartInstance, typeChartInstance, weeklyChartInstance;
+
+        // =====================================================
+        // FILTER STATE
+        // =====================================================
+        let currentTypeFilter = 'all';
+        let currentStartDate = originalDateRangeStart;
+        let currentEndDate = originalDateRangeEnd;
+
+        // =====================================================
+        // CHART CONFIGURATION
+        // =====================================================
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.color = '#64748B';
+
+        const chartColors = {
+            primary: '#4361EE',
+            primaryLight: 'rgba(67, 97, 238, 0.1)',
+            secondary: '#06D6A0',
+            secondaryLight: 'rgba(6, 214, 160, 0.1)',
+            purple: '#8B5CF6',
+            pink: '#EC4899',
+            warning: '#F59E0B',
+            danger: '#EF4444'
+        };
+
+        const typeIcons = {
+            'photo': '📷',
+            'video': '🎬',
+            'reel': '🎞️',
+            'live': '🔴',
+            'text': '📝',
+            'other': '📄'
+        };
+
+        // =====================================================
+        // UTILITY FUNCTIONS
+        // =====================================================
+        function formatNumber(num) {
+            return num.toLocaleString();
+        }
+
+        function getTypeIcon(type) {
+            return typeIcons[type.toLowerCase()] || '📄';
+        }
+
+        function getTypeBadgeClass(type) {
+            const t = type.toLowerCase().replace(' ', '');
+            return `badge-${t}`;
+        }
+
+        function getTimeSlot(hour) {
+            if (hour >= 6 && hour < 12) return 'Morning (6AM-12PM)';
+            if (hour >= 12 && hour < 18) return 'Afternoon (12PM-6PM)';
+            if (hour >= 18 && hour < 24) return 'Evening (6PM-12AM)';
+            return 'Night (12AM-6AM)';
+        }
+
+        function getDayOfWeek(dateStr) {
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const date = new Date(dateStr);
+            return days[date.getDay()];
+        }
+
+        function getISOWeek(dateStr) {
+            const date = new Date(dateStr);
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            return { year: d.getUTCFullYear(), week: weekNum };
+        }
+
+        function getMonthYear(dateStr) {
+            const date = new Date(dateStr);
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `${months[date.getMonth()]} ${date.getFullYear()}`;
+        }
+
+        // =====================================================
+        // FILTER FUNCTIONS
+        // =====================================================
+        function getFilteredPosts() {
+            return allPostsData.filter(post => {
+                const typeMatch = currentTypeFilter === 'all' || post.type.toLowerCase() === currentTypeFilter;
+                const dateMatch = post.date >= currentStartDate && post.date <= currentEndDate;
+                return typeMatch && dateMatch;
+            });
+        }
+
+        function applyGlobalFilter() {
+            currentStartDate = document.getElementById('globalStartDate').value;
+            currentEndDate = document.getElementById('globalEndDate').value;
+            updateEntireDashboard();
+        }
+
+        function resetGlobalFilter() {
+            currentTypeFilter = 'all';
+            currentStartDate = originalDateRangeStart;
+            currentEndDate = originalDateRangeEnd;
+
+            document.getElementById('globalStartDate').value = originalDateRangeStart;
+            document.getElementById('globalEndDate').value = originalDateRangeEnd;
+
+            document.querySelectorAll('#globalTypeFilters .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === 'all') btn.classList.add('active');
+            });
+
+            updateEntireDashboard();
+        }
+
+        // =====================================================
+        // CALCULATE METRICS FROM FILTERED DATA
+        // =====================================================
+        function calculateMetrics(posts) {
+            const metrics = {
+                totalPosts: posts.length,
+                totalEngagement: 0,
+                totalReactions: 0,
+                totalComments: 0,
+                totalShares: 0,
+                postTypes: {},
+                dayOfWeek: {},
+                timeSlots: {},
+                dailyEngagement: {},
+                weeklyEngagement: {},
+                monthlyEngagement: {}
+            };
+
+            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const slotOrder = ['Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-12AM)', 'Night (12AM-6AM)'];
+
+            dayOrder.forEach(d => metrics.dayOfWeek[d] = { count: 0, engagement: 0 });
+            slotOrder.forEach(s => metrics.timeSlots[s] = { count: 0, engagement: 0 });
+
+            posts.forEach(post => {
+                metrics.totalEngagement += post.engagement;
+                metrics.totalReactions += post.reactions;
+                metrics.totalComments += post.comments;
+                metrics.totalShares += post.shares;
+
+                // Post type
+                const type = post.type;
+                if (!metrics.postTypes[type]) {
+                    metrics.postTypes[type] = { count: 0, engagement: 0, reactions: 0, comments: 0, shares: 0 };
+                }
+                metrics.postTypes[type].count++;
+                metrics.postTypes[type].engagement += post.engagement;
+                metrics.postTypes[type].reactions += post.reactions;
+                metrics.postTypes[type].comments += post.comments;
+                metrics.postTypes[type].shares += post.shares;
+
+                // Day of week
+                const day = getDayOfWeek(post.date);
+                if (metrics.dayOfWeek[day]) {
+                    metrics.dayOfWeek[day].count++;
+                    metrics.dayOfWeek[day].engagement += post.engagement;
+                }
+
+                // Time slot (using hour from date, approximate)
+                const hour = new Date(post.date).getHours() || 12;
+                const slot = getTimeSlot(hour);
+                if (metrics.timeSlots[slot]) {
+                    metrics.timeSlots[slot].count++;
+                    metrics.timeSlots[slot].engagement += post.engagement;
+                }
+
+                // Daily
+                if (!metrics.dailyEngagement[post.date]) {
+                    metrics.dailyEngagement[post.date] = 0;
+                }
+                metrics.dailyEngagement[post.date] += post.engagement;
+
+                // Weekly (ISO)
+                const isoWeek = getISOWeek(post.date);
+                const weekKey = `${isoWeek.year}-W${String(isoWeek.week).padStart(2, '0')}`;
+                if (!metrics.weeklyEngagement[weekKey]) {
+                    metrics.weeklyEngagement[weekKey] = { engagement: 0, posts: 0, minDate: post.date, maxDate: post.date, week: isoWeek.week, year: isoWeek.year };
+                }
+                metrics.weeklyEngagement[weekKey].engagement += post.engagement;
+                metrics.weeklyEngagement[weekKey].posts++;
+                if (post.date < metrics.weeklyEngagement[weekKey].minDate) metrics.weeklyEngagement[weekKey].minDate = post.date;
+                if (post.date > metrics.weeklyEngagement[weekKey].maxDate) metrics.weeklyEngagement[weekKey].maxDate = post.date;
+
+                // Monthly
+                const monthKey = getMonthYear(post.date);
+                if (!metrics.monthlyEngagement[monthKey]) {
+                    metrics.monthlyEngagement[monthKey] = { engagement: 0, posts: 0 };
+                }
+                metrics.monthlyEngagement[monthKey].engagement += post.engagement;
+                metrics.monthlyEngagement[monthKey].posts++;
+            });
+
+            metrics.avgEngagement = metrics.totalPosts > 0 ? metrics.totalEngagement / metrics.totalPosts : 0;
+
+            return metrics;
+        }
+
+        // =====================================================
+        // UPDATE DASHBOARD SECTIONS
+        // =====================================================
+        function updateEntireDashboard() {
+            const filteredPosts = getFilteredPosts();
+            const metrics = calculateMetrics(filteredPosts);
+
+            // Update header
+            const dateRange = filteredPosts.length > 0
+                ? `${currentStartDate} — ${currentEndDate} • ${filteredPosts.length} posts analyzed`
+                : 'No posts in selected range';
+            document.getElementById('headerDateRange').innerHTML = `📅 ${dateRange}`;
+
+            // Update filter summary
+            document.getElementById('summaryPosts').textContent = formatNumber(metrics.totalPosts);
+            document.getElementById('summaryEngagement').textContent = formatNumber(metrics.totalEngagement);
+            document.getElementById('summaryAvg').textContent = metrics.avgEngagement.toFixed(1);
+            document.getElementById('summaryDateRange').textContent = `${currentStartDate} to ${currentEndDate}`;
+
+            // Update KPIs
+            document.getElementById('kpiTotalPosts').textContent = formatNumber(metrics.totalPosts);
+            document.getElementById('kpiTotalEngagement').textContent = formatNumber(metrics.totalEngagement);
+            document.getElementById('kpiAvgEngagement').textContent = metrics.avgEngagement.toFixed(1);
+            document.getElementById('kpiReactions').textContent = formatNumber(metrics.totalReactions);
+            document.getElementById('kpiComments').textContent = formatNumber(metrics.totalComments);
+            document.getElementById('kpiShares').textContent = formatNumber(metrics.totalShares);
+
+            // Update post type cards
+            updatePostTypeCards(metrics.postTypes);
+
+            // Update weekly metrics
+            updateWeeklyMetrics(metrics.weeklyEngagement);
+
+            // Update monthly metrics
+            updateMonthlyMetrics(metrics.monthlyEngagement);
+
+            // Update day of week table
+            updateDayOfWeekTable(metrics.dayOfWeek);
+
+            // Update time slot table
+            updateTimeSlotTable(metrics.timeSlots);
+
+            // Update top posts
+            updateTopPostsTable(filteredPosts);
+
+            // Update all posts table
+            updateAllPostsTable(filteredPosts);
+
+            // Update charts
+            updateCharts(metrics);
+
+            // Update type filter counts
+            updateFilterCounts();
+        }
+
+        function updatePostTypeCards(postTypes) {
+            const grid = document.getElementById('postTypeGrid');
+            grid.innerHTML = '';
+
+            const typeOrder = ['Photo', 'Video', 'Reel', 'Live', 'Text'];
+            const sortedTypes = Object.entries(postTypes)
+                .sort((a, b) => b[1].engagement - a[1].engagement);
+
+            sortedTypes.forEach(([type, data]) => {
+                const avg = data.count > 0 ? data.engagement / data.count : 0;
+                grid.innerHTML += `
+                    <div class="post-type-card ${type.toLowerCase()}">
+                        <div class="type-header">
+                            <div class="type-icon">${getTypeIcon(type)}</div>
+                            <div>
+                                <div class="type-name">${type}</div>
+                                <div class="type-count">${data.count} posts</div>
+                            </div>
+                        </div>
+                        <div class="type-stats">
+                            <div class="stat-item">
+                                <div class="stat-value">${formatNumber(data.engagement)}</div>
+                                <div class="stat-label">Engagement</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${Math.round(avg)}</div>
+                                <div class="stat-label">Avg/Post</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${formatNumber(data.reactions)}</div>
+                                <div class="stat-label">Reactions</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${formatNumber(data.comments)}</div>
+                                <div class="stat-label">Comments</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function updateWeeklyMetrics(weeklyData) {
+            const container = document.getElementById('weeklyMetrics');
+            const weeks = Object.entries(weeklyData)
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .slice(0, 8);
+
+            if (weeks.length === 0) {
+                container.innerHTML = '<p style="color: var(--gray-400); text-align: center;">No data in selected range</p>';
+                return;
+            }
+
+            container.innerHTML = weeks.map(([key, data]) => {
+                const avg = data.posts > 0 ? data.engagement / data.posts : 0;
+                const startDate = new Date(data.minDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const endDate = new Date(data.maxDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return `
+                    <div class="period-row">
+                        <div class="period-info">
+                            <div class="period-label">
+                                <span class="week-num">W${data.week}</span>
+                                ISO Week ${data.week}
+                            </div>
+                            <div class="period-dates">
+                                <span class="date-badge">${startDate}, ${data.year}</span>
+                                <span>→</span>
+                                <span class="date-badge">${endDate}, ${data.year}</span>
+                                <span class="active-badge">Active Days</span>
+                            </div>
+                        </div>
+                        <div class="period-stats">
+                            <div class="period-stat">
+                                <div class="value">${data.posts}</div>
+                                <div class="label">Posts</div>
+                            </div>
+                            <div class="period-stat">
+                                <div class="value">${formatNumber(data.engagement)}</div>
+                                <div class="label">Engage</div>
+                            </div>
+                            <div class="period-stat">
+                                <div class="value">${Math.round(avg)}</div>
+                                <div class="label">Avg</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateMonthlyMetrics(monthlyData) {
+            const container = document.getElementById('monthlyMetrics');
+            const months = Object.entries(monthlyData)
+                .sort((a, b) => {
+                    const [aMonth, aYear] = a[0].split(' ');
+                    const [bMonth, bYear] = b[0].split(' ');
+                    return bYear - aYear || new Date(`${bMonth} 1`).getMonth() - new Date(`${aMonth} 1`).getMonth();
+                })
+                .slice(0, 6);
+
+            if (months.length === 0) {
+                container.innerHTML = '<p style="color: var(--gray-400); text-align: center;">No data in selected range</p>';
+                return;
+            }
+
+            container.innerHTML = months.map(([key, data]) => {
+                const avg = data.posts > 0 ? data.engagement / data.posts : 0;
+                const [month, year] = key.split(' ');
+                return `
+                    <div class="period-row">
+                        <div class="period-info">
+                            <div class="period-label">${month}</div>
+                            <div class="period-dates">
+                                <span class="date-badge">${year}</span>
+                            </div>
+                        </div>
+                        <div class="period-stats">
+                            <div class="period-stat">
+                                <div class="value">${data.posts}</div>
+                                <div class="label">Posts</div>
+                            </div>
+                            <div class="period-stat">
+                                <div class="value">${formatNumber(data.engagement)}</div>
+                                <div class="label">Engage</div>
+                            </div>
+                            <div class="period-stat">
+                                <div class="value">${Math.round(avg)}</div>
+                                <div class="label">Avg</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateDayOfWeekTable(dayData) {
+            const tbody = document.getElementById('dayOfWeekTable');
+            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+            let bestDay = '';
+            let bestAvg = 0;
+            dayOrder.forEach(day => {
+                const data = dayData[day];
+                const avg = data.count > 0 ? data.engagement / data.count : 0;
+                if (avg > bestAvg) {
+                    bestAvg = avg;
+                    bestDay = day;
+                }
+            });
+
+            tbody.innerHTML = dayOrder.map(day => {
+                const data = dayData[day];
+                const avg = data.count > 0 ? data.engagement / data.count : 0;
+                const isHighlight = day === bestDay && data.count > 0;
+                return `
+                    <tr ${isHighlight ? 'class="highlight-row"' : ''}>
+                        <td>
+                            ${day}
+                            ${isHighlight ? '<span class="badge-best">⭐ BEST</span>' : ''}
+                        </td>
+                        <td class="number">${data.count}</td>
+                        <td class="number">${formatNumber(data.engagement)}</td>
+                        <td class="number">${avg.toFixed(1)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateTimeSlotTable(slotData) {
+            const tbody = document.getElementById('timeSlotTable');
+            const slotOrder = ['Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-12AM)', 'Night (12AM-6AM)'];
+
+            let bestSlot = '';
+            let bestAvg = 0;
+            slotOrder.forEach(slot => {
+                const data = slotData[slot];
+                const avg = data.count > 0 ? data.engagement / data.count : 0;
+                if (avg > bestAvg) {
+                    bestAvg = avg;
+                    bestSlot = slot;
+                }
+            });
+
+            tbody.innerHTML = slotOrder.map(slot => {
+                const data = slotData[slot];
+                const avg = data.count > 0 ? data.engagement / data.count : 0;
+                const isHighlight = slot === bestSlot && data.count > 0;
+                return `
+                    <tr ${isHighlight ? 'class="highlight-row"' : ''}>
+                        <td>
+                            ${slot}
+                            ${isHighlight ? '<span class="badge-best">⭐ BEST</span>' : ''}
+                        </td>
+                        <td class="number">${data.count}</td>
+                        <td class="number">${formatNumber(data.engagement)}</td>
+                        <td class="number">${avg.toFixed(1)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateTopPostsTable(posts) {
+            const tbody = document.getElementById('topPostsTable');
+            const topPosts = [...posts].sort((a, b) => b.engagement - a.engagement).slice(0, 15);
+
+            if (topPosts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--gray-400);">No posts in selected range</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = topPosts.map(post => `
+                <tr>
+                    <td>${post.date}</td>
+                    <td><span class="badge ${getTypeBadgeClass(post.type)}">${post.type}</span></td>
+                    <td class="message-cell" title="${post.message}">${post.message.slice(0, 50)}${post.message.length > 50 ? '...' : ''}</td>
+                    <td class="number">${formatNumber(post.reactions)}</td>
+                    <td class="number">${formatNumber(post.comments)}</td>
+                    <td class="number">${formatNumber(post.shares)}</td>
+                    <td class="number"><strong>${formatNumber(post.engagement)}</strong></td>
+                    <td><a href="${post.permalink}" target="_blank">View →</a></td>
+                </tr>
+            `).join('');
+        }
+
+        function updateAllPostsTable(posts) {
+            const tbody = document.getElementById('allPostsTable');
+            const sortedPosts = [...posts].sort((a, b) => b.date.localeCompare(a.date));
+
+            if (sortedPosts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--gray-400);">No posts in selected range</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = sortedPosts.map(post => `
+                <tr>
+                    <td>${post.date}</td>
+                    <td><span class="badge ${getTypeBadgeClass(post.type)}">${post.type}</span></td>
+                    <td class="message-cell" title="${post.message}">${post.message.slice(0, 40)}${post.message.length > 40 ? '...' : ''}</td>
+                    <td class="number">${formatNumber(post.reactions)}</td>
+                    <td class="number">${formatNumber(post.comments)}</td>
+                    <td class="number">${formatNumber(post.shares)}</td>
+                    <td class="number">${formatNumber(post.engagement)}</td>
+                    <td><a href="${post.permalink}" target="_blank">View →</a></td>
+                </tr>
+            `).join('');
+        }
+
+        function updateFilterCounts() {
+            // Count posts by type within date range
+            const postsInDateRange = allPostsData.filter(post =>
+                post.date >= currentStartDate && post.date <= currentEndDate
+            );
+
+            document.getElementById('countAll').textContent = `(${postsInDateRange.length})`;
+
+            const typeCounts = {};
+            postsInDateRange.forEach(post => {
+                const type = post.type;
+                typeCounts[type] = (typeCounts[type] || 0) + 1;
+            });
+
+            Object.keys(typeCounts).forEach(type => {
+                const el = document.getElementById(`count${type}`);
+                if (el) el.textContent = `(${typeCounts[type]})`;
+            });
+        }
+
+        function updateCharts(metrics) {
+            // Daily Chart
+            const dailyLabels = Object.keys(metrics.dailyEngagement).sort().slice(-30);
+            const dailyValues = dailyLabels.map(d => metrics.dailyEngagement[d]);
+
+            if (dailyChartInstance) dailyChartInstance.destroy();
+            dailyChartInstance = new Chart(document.getElementById('dailyChart'), {
+                type: 'line',
+                data: {
+                    labels: dailyLabels,
+                    datasets: [{
+                        label: 'Engagement',
+                        data: dailyValues,
+                        borderColor: chartColors.primary,
+                        backgroundColor: chartColors.primaryLight,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: chartColors.primary,
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { color: '#E2E8F0' } }
+                    }
+                }
+            });
+
+            // Monthly Chart
+            const monthlyLabels = Object.keys(metrics.monthlyEngagement);
+            const monthlyValues = monthlyLabels.map(m => metrics.monthlyEngagement[m].engagement);
+
+            if (monthlyChartInstance) monthlyChartInstance.destroy();
+            monthlyChartInstance = new Chart(document.getElementById('monthlyChart'), {
+                type: 'bar',
+                data: {
+                    labels: monthlyLabels,
+                    datasets: [{
+                        label: 'Engagement',
+                        data: monthlyValues,
+                        backgroundColor: chartColors.primary,
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { color: '#E2E8F0' } }
+                    }
+                }
+            });
+
+            // Type Chart
+            const typeLabels = Object.keys(metrics.postTypes);
+            const typeValues = typeLabels.map(t => metrics.postTypes[t].count);
+
+            if (typeChartInstance) typeChartInstance.destroy();
+            typeChartInstance = new Chart(document.getElementById('typeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: typeLabels,
+                    datasets: [{
+                        data: typeValues,
+                        backgroundColor: [chartColors.primary, chartColors.danger, chartColors.pink, chartColors.secondary, chartColors.purple, '#94A3B8'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: '60%',
+                    plugins: { legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true } } }
+                }
+            });
+
+            // Weekly Chart
+            const weeklyLabels = Object.keys(metrics.weeklyEngagement).sort().slice(-12);
+            const weeklyValues = weeklyLabels.map(w => metrics.weeklyEngagement[w].engagement);
+            const weeklyDisplayLabels = weeklyLabels.map(w => `W${w.split('-W')[1]}`);
+
+            if (weeklyChartInstance) weeklyChartInstance.destroy();
+            weeklyChartInstance = new Chart(document.getElementById('weeklyChart'), {
+                type: 'bar',
+                data: {
+                    labels: weeklyDisplayLabels,
+                    datasets: [{
+                        label: 'Engagement',
+                        data: weeklyValues,
+                        backgroundColor: chartColors.secondary,
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { color: '#E2E8F0' } }
+                    }
+                }
+            });
+        }
+
+        // =====================================================
+        // EVENT LISTENERS
+        // =====================================================
+        document.querySelectorAll('#globalTypeFilters .filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('#globalTypeFilters .filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentTypeFilter = this.dataset.filter;
+                updateEntireDashboard();
+            });
+        });
+
+        // =====================================================
+        // INITIALIZE DASHBOARD
+        // =====================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            updateEntireDashboard();
+        });
+    </script>
+</body>
+</html>
