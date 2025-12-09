@@ -494,58 +494,46 @@ def main():
     # Pass cache_key to invalidate cache when files change
     page_info, posts_data, videos_data, all_posts_data, stories_data = load_api_data(_cache_key=get_cache_key())
 
-    # PRIMARY: Load CSV data (has Reach, Views, complete engagement data)
-    # Pass cache_key to invalidate cache when CSV changes
-    df = load_csv_data(_cache_key=get_cache_key())
-
-    # If no CSV, fall back to API data (use all_posts_data for full history)
-    if df is None or df.empty:
-        # Prefer all_posts_data (802 posts from June) over posts_data (30 posts with reactions)
-        if all_posts_data.get('posts'):
-            df = prepare_posts_dataframe(all_posts_data)
-        else:
-            df = prepare_posts_dataframe(posts_data)
+    # PRIMARY: Use API data for posts (most complete, real-time engagement data)
+    # API has 552 posts with reactions, comments, shares breakdown
+    if all_posts_data.get('posts'):
+        df = prepare_posts_dataframe(all_posts_data)
     else:
-        # Merge reaction data from API into CSV data (API has fresher/real-time data)
-        # Updated: 2025-12-06 - now updates reactions, comments, shares from API
-        api_posts = posts_data.get('posts', [])
-        if api_posts:
-            # Create a mapping of post_id to all reaction data
-            reaction_cols = ['like', 'love', 'haha', 'wow', 'sad', 'angry']
-            engagement_cols = ['reactions', 'comments', 'shares', 'engagement']
-            all_cols = reaction_cols + engagement_cols
-            api_reactions = {}
-            for post in api_posts:
-                # API uses full ID like "580104038511364_122169709076762707"
-                # CSV might use just the second part
-                post_id = post.get('id', '')
-                short_id = post_id.split('_')[-1] if '_' in post_id else post_id
-                post_data = {col: post.get(col, 0) for col in all_cols}
-                api_reactions[post_id] = post_data
-                api_reactions[short_id] = post_data
+        df = prepare_posts_dataframe(posts_data)
 
-            # Add columns to df if not present
-            for col in all_cols:
-                if col not in df.columns:
-                    df[col] = 0
+    # SECONDARY: Load CSV only for Reach and Views (Meta Business Suite has these)
+    # Pass cache_key to invalidate cache when CSV changes
+    csv_df = load_csv_data(_cache_key=get_cache_key())
 
-            # Match and update data from API (fresher data)
-            for idx, row in df.iterrows():
-                csv_post_id = str(row.get('post_id', ''))
-                if csv_post_id in api_reactions:
-                    api_data = api_reactions[csv_post_id]
-                    # Update reaction breakdown
-                    for col in reaction_cols:
-                        df.at[idx, col] = api_data.get(col, 0)
-                    # Update reactions/comments/shares if API has them (more current)
-                    if api_data.get('reactions', 0) > 0:
-                        df.at[idx, 'reactions'] = api_data['reactions']
-                    if api_data.get('comments', 0) > 0:
-                        df.at[idx, 'comments'] = api_data['comments']
-                    if api_data.get('shares', 0) > 0:
-                        df.at[idx, 'shares'] = api_data['shares']
-                    # Recalculate engagement
-                    df.at[idx, 'engagement'] = df.at[idx, 'reactions'] + df.at[idx, 'comments'] + df.at[idx, 'shares']
+    # Merge Reach and Views from CSV into API data
+    if csv_df is not None and not csv_df.empty:
+        # Create mapping of post_id to reach/views from CSV
+        csv_metrics = {}
+        for idx, row in csv_df.iterrows():
+            csv_post_id = str(row.get('post_id', ''))
+            csv_metrics[csv_post_id] = {
+                'reach': row.get('reach', 0),
+                'views': row.get('views', 0)
+            }
+
+        # Add reach/views columns to df if not present
+        if 'reach' not in df.columns:
+            df['reach'] = 0
+        if 'views' not in df.columns:
+            df['views'] = 0
+
+        # Match and merge reach/views from CSV into API data
+        for idx, row in df.iterrows():
+            api_post_id = str(row.get('post_id', ''))
+            # Try both full ID and short ID
+            short_id = api_post_id.split('_')[-1] if '_' in api_post_id else api_post_id
+
+            if api_post_id in csv_metrics:
+                df.at[idx, 'reach'] = csv_metrics[api_post_id].get('reach', 0)
+                df.at[idx, 'views'] = csv_metrics[api_post_id].get('views', 0)
+            elif short_id in csv_metrics:
+                df.at[idx, 'reach'] = csv_metrics[short_id].get('reach', 0)
+                df.at[idx, 'views'] = csv_metrics[short_id].get('views', 0)
 
     # Header
     if logo_base64:
