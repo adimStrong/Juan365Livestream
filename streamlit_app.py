@@ -251,9 +251,13 @@ def get_cache_key():
     base_dir = Path(__file__).parent
     api_cache_dir = base_dir / 'api_cache'
     posts_file = api_cache_dir / 'posts.json'
+    csv_file = base_dir / 'exports' / 'Juan365_MERGED_ALL.csv'
+    mtime = 0
     if posts_file.exists():
-        return int(posts_file.stat().st_mtime)
-    return 0
+        mtime = int(posts_file.stat().st_mtime)
+    if csv_file.exists():
+        mtime = max(mtime, int(csv_file.stat().st_mtime))
+    return mtime
 
 @st.cache_data(ttl=3600)
 def load_api_data(_cache_key=None):
@@ -348,7 +352,7 @@ def load_api_data(_cache_key=None):
 
 
 @st.cache_data(ttl=3600)
-def load_csv_data():
+def load_csv_data(_cache_key=None):
     """Load data from CSV exports (fallback)"""
     exports_dir = Path(__file__).parent / 'exports'
 
@@ -491,7 +495,8 @@ def main():
     page_info, posts_data, videos_data, all_posts_data, stories_data = load_api_data(_cache_key=get_cache_key())
 
     # PRIMARY: Load CSV data (has Reach, Views, complete engagement data)
-    df = load_csv_data()
+    # Pass cache_key to invalidate cache when CSV changes
+    df = load_csv_data(_cache_key=get_cache_key())
 
     # If no CSV, fall back to API data (use all_posts_data for full history)
     if df is None or df.empty:
