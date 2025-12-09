@@ -448,7 +448,7 @@ def prepare_posts_dataframe(posts_data):
 
     df['time_slot'] = df['hour'].apply(get_time_slot)
 
-    # Clean post types - API uses 'status_type', map to readable names
+    # Clean post types - detect from permalink_url if status_type not available
     type_mapping = {
         'added_photos': 'Photos',
         'added_video': 'Videos',
@@ -471,7 +471,16 @@ def prepare_posts_dataframe(posts_data):
         }
         df['post_type_clean'] = df['post_type'].map(post_type_mapping).fillna(df['post_type'])
     else:
-        df['post_type_clean'] = 'Unknown'
+        # Detect post type from permalink_url
+        def detect_post_type(row):
+            url = str(row.get('permalink_url', '') or row.get('permalink', ''))
+            if '/videos/' in url or '/reel/' in url:
+                return 'Videos'
+            elif '/photos/' in url:
+                return 'Photos'
+            else:
+                return 'Posts'  # Default to Posts for all content
+        df['post_type_clean'] = df.apply(detect_post_type, axis=1)
 
     # Add post_id column if not present (for compatibility)
     if 'post_id' not in df.columns and 'id' in df.columns:
@@ -976,8 +985,19 @@ def main():
     }).reset_index()
     daily_all.rename(columns={'post_id': 'post_count'}, inplace=True)
 
-    # Filter by content type - Posts (Photos + Text)
-    posts_df = filtered_df[filtered_df['post_type_clean'].isin(['Photos', 'Text'])]
+    # Filter by content type - Videos (includes reels)
+    videos_df = filtered_df[filtered_df['post_type_clean'] == 'Videos']
+    daily_videos = videos_df.groupby('date').agg({
+        'reactions': 'sum',
+        'comments': 'sum',
+        'shares': 'sum',
+        'post_id': 'count'
+    }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+    if not daily_videos.empty:
+        daily_videos.rename(columns={'post_id': 'post_count'}, inplace=True)
+
+    # Filter by content type - Posts (non-video content)
+    posts_df = filtered_df[filtered_df['post_type_clean'].isin(['Posts', 'Photos'])]
     daily_posts = posts_df.groupby('date').agg({
         'reactions': 'sum',
         'comments': 'sum',
@@ -987,56 +1007,8 @@ def main():
     if not daily_posts.empty:
         daily_posts.rename(columns={'post_id': 'post_count'}, inplace=True)
 
-    # Videos and Reels: Use API data (all_posts_data) which has complete data including December
-    # CSV data may not have recent Videos/Reels, so we use API data for these charts
-    api_df = prepare_posts_dataframe(all_posts_data) if all_posts_data.get('posts') else None
-
-    if api_df is not None and not api_df.empty:
-        # Apply same date filter as filtered_df
-        api_filtered = api_df[(api_df['date'] >= start_date) & (api_df['date'] <= end_date)]
-
-        # Videos from API data
-        videos_df = api_filtered[api_filtered['post_type_clean'] == 'Videos']
-        daily_videos = videos_df.groupby('date').agg({
-            'reactions': 'sum',
-            'comments': 'sum',
-            'shares': 'sum',
-            'id': 'count'
-        }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-        if not daily_videos.empty:
-            daily_videos.rename(columns={'id': 'post_count'}, inplace=True)
-
-        # Reels from API data
-        reels_df = api_filtered[api_filtered['post_type_clean'] == 'Reels']
-        daily_reels = reels_df.groupby('date').agg({
-            'reactions': 'sum',
-            'comments': 'sum',
-            'shares': 'sum',
-            'id': 'count'
-        }).reset_index() if not reels_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-        if not daily_reels.empty:
-            daily_reels.rename(columns={'id': 'post_count'}, inplace=True)
-    else:
-        # Fallback to CSV data if API data not available
-        videos_df = filtered_df[filtered_df['post_type_clean'] == 'Videos']
-        daily_videos = videos_df.groupby('date').agg({
-            'reactions': 'sum',
-            'comments': 'sum',
-            'shares': 'sum',
-            'post_id': 'count'
-        }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-        if not daily_videos.empty:
-            daily_videos.rename(columns={'post_id': 'post_count'}, inplace=True)
-
-        reels_df = filtered_df[filtered_df['post_type_clean'] == 'Reels']
-        daily_reels = reels_df.groupby('date').agg({
-            'reactions': 'sum',
-            'comments': 'sum',
-            'shares': 'sum',
-            'post_id': 'count'
-        }).reset_index() if not reels_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-        if not daily_reels.empty:
-            daily_reels.rename(columns={'post_id': 'post_count'}, inplace=True)
+    # Reels - empty for now since detection combines with Videos
+    daily_reels = pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
 
     # Create 4 charts in 2x2 grid
     col1, col2 = st.columns(2)
@@ -1251,19 +1223,32 @@ def main():
 
     with col2:
         st.markdown("### 📆 Monthly Engagement")
+        # Group by month and calculate engagement breakdown
         monthly_stats = filtered_df.groupby('month').agg({
+            'reactions': 'sum',
+            'comments': 'sum',
+            'shares': 'sum',
             'engagement': 'sum',
             'post_id': 'count'
         }).rename(columns={'post_id': 'posts'}).reset_index()
 
-        fig = px.bar(
-            monthly_stats,
-            x='month',
-            y='engagement',
-            title='Monthly Engagement',
-            color_discrete_sequence=['#4361EE']
+        # Sort by month
+        monthly_stats = monthly_stats.sort_values('month')
+
+        # Create stacked bar chart showing breakdown
+        fig = go.Figure()
+        fig.add_trace(go.Bar(name='Reactions', x=monthly_stats['month'], y=monthly_stats['reactions'], marker_color='#4361EE'))
+        fig.add_trace(go.Bar(name='Comments', x=monthly_stats['month'], y=monthly_stats['comments'], marker_color='#7209B7'))
+        fig.add_trace(go.Bar(name='Shares', x=monthly_stats['month'], y=monthly_stats['shares'], marker_color='#F72585'))
+
+        fig.update_layout(
+            title='Monthly Engagement by Type',
+            barmode='stack',
+            xaxis_title='Month',
+            yaxis_title='Total Engagement',
+            height=400,
+            hovermode='x unified'
         )
-        fig.update_layout(xaxis_title='Month', yaxis_title='Total Engagement', height=400)
         st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
