@@ -246,8 +246,17 @@ def fetch_videos_api(limit=100):
     }
 
 
+def get_cache_key():
+    """Get file modification times for cache invalidation."""
+    base_dir = Path(__file__).parent
+    api_cache_dir = base_dir / 'api_cache'
+    posts_file = api_cache_dir / 'posts.json'
+    if posts_file.exists():
+        return int(posts_file.stat().st_mtime)
+    return 0
+
 @st.cache_data(ttl=3600)
-def load_api_data():
+def load_api_data(_cache_key=None):
     """Load data from cached JSON files (committed to git) or fetch from API.
 
     Priority:
@@ -478,7 +487,8 @@ def format_number(num):
 
 def main():
     # Load API data (for page-level info: followers, rating, video views, reaction breakdown)
-    page_info, posts_data, videos_data, all_posts_data, stories_data = load_api_data()
+    # Pass cache_key to invalidate cache when files change
+    page_info, posts_data, videos_data, all_posts_data, stories_data = load_api_data(_cache_key=get_cache_key())
 
     # PRIMARY: Load CSV data (has Reach, Views, complete engagement data)
     df = load_csv_data()
