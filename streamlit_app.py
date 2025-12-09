@@ -481,6 +481,31 @@ def prepare_posts_dataframe(posts_data):
     if 'permalink' not in df.columns and 'permalink_url' in df.columns:
         df['permalink'] = df['permalink_url']
 
+    # Calculate accurate reactions from breakdown (like, love, haha, wow, sad, angry)
+    reaction_cols = ['like', 'love', 'haha', 'wow', 'sad', 'angry']
+    for col in reaction_cols:
+        if col not in df.columns:
+            df[col] = 0
+        else:
+            df[col] = df[col].fillna(0).astype(int)
+
+    # Calculate total reactions from breakdown (more accurate than stored 'reactions' field)
+    df['reactions'] = df[reaction_cols].sum(axis=1)
+
+    # Ensure comments and shares columns exist and are integers
+    if 'comments' not in df.columns:
+        df['comments'] = 0
+    else:
+        df['comments'] = df['comments'].fillna(0).astype(int)
+
+    if 'shares' not in df.columns:
+        df['shares'] = 0
+    else:
+        df['shares'] = df['shares'].fillna(0).astype(int)
+
+    # Calculate total engagement
+    df['engagement'] = df['reactions'] + df['comments'] + df['shares']
+
     return df
 
 
