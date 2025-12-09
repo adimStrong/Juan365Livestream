@@ -673,8 +673,18 @@ def main():
     # Data last updated
     fetched_at = all_posts_data.get('fetched_at') or posts_data.get('fetched_at', 'Unknown')
     if fetched_at != 'Unknown':
-        fetched_dt = datetime.fromisoformat(fetched_at)
-        st.sidebar.markdown(f"**Updated:** {fetched_dt.strftime('%Y-%m-%d %H:%M')}")
+        try:
+            # Try ISO format first
+            fetched_dt = datetime.fromisoformat(fetched_at)
+        except ValueError:
+            try:
+                # Try HTTP header format: "Tue, 09 Dec 2025 04:58:09 GMT"
+                from email.utils import parsedate_to_datetime
+                fetched_dt = parsedate_to_datetime(fetched_at)
+            except:
+                fetched_dt = None
+        if fetched_dt:
+            st.sidebar.markdown(f"**Updated:** {fetched_dt.strftime('%Y-%m-%d %H:%M')}")
 
     # Show date range if available
     date_range = all_posts_data.get('date_range', {})
