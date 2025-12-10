@@ -515,6 +515,24 @@ def prepare_posts_dataframe(posts_data):
     # Calculate total engagement
     df['engagement'] = df['reactions'] + df['comments'] + df['shares']
 
+    # Add content_category for 4-type classification (Photos, Livestreams, Reels, Videos)
+    def categorize_content(row):
+        msg = str(row.get('message', '') or '').lower()
+        ptype = row.get('post_type', '')
+
+        if ptype in ['Video', 'Reel'] and 'live' in msg:
+            return 'Livestreams'
+        elif ptype == 'Reel':
+            return 'Reels'
+        elif ptype == 'Video':
+            return 'Videos'
+        elif ptype == 'Photo':
+            return 'Photos'
+        else:
+            return 'Other'
+
+    df['content_category'] = df.apply(categorize_content, axis=1)
+
     return df
 
 
@@ -1262,6 +1280,153 @@ def main():
             hovermode='x unified'
         )
         st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+
+    # ===== DISTRIBUTION STATISTICS BY CONTENT TYPE =====
+    with st.expander("📊 Post Distribution by Content Type", expanded=False):
+        st.markdown("**Engagement statistics broken down by content category**")
+
+        # Check if content_category column exists
+        if 'content_category' in filtered_df.columns:
+            # Calculate distribution stats
+            content_stats = filtered_df.groupby('content_category')['engagement'].agg([
+                ('Posts', 'count'),
+                ('Median', 'median'),
+                ('Mean', 'mean'),
+                ('Min', 'min'),
+                ('Max', 'max'),
+                ('Std Dev', 'std')
+            ]).round(0).astype(int)
+
+            # Sort by median engagement descending
+            content_stats = content_stats.sort_values('Median', ascending=False)
+
+            # Reset index to make content_category a column
+            content_stats = content_stats.reset_index()
+            content_stats.columns = ['Content Type', 'Posts', 'Median', 'Mean', 'Min', 'Max', 'Std Dev']
+
+            col1, col2 = st.columns([1, 1])
+
+            with col1:
+                st.markdown("##### Statistics Table")
+                st.dataframe(
+                    content_stats.style.highlight_max(subset=['Median'], color=get_highlight_color()),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # Best performer insight
+                best_type = content_stats.iloc[0]['Content Type']
+                best_median = content_stats.iloc[0]['Median']
+                overall_median = filtered_df['engagement'].median()
+                pct_better = ((best_median - overall_median) / overall_median * 100) if overall_median > 0 else 0
+                st.success(f"⭐ **{best_type}** has highest median engagement ({best_median:,.0f}) - {pct_better:.0f}% above overall median")
+
+            with col2:
+                st.markdown("##### Engagement Distribution")
+                # Create box plot
+                fig_box = go.Figure()
+
+                colors = {'Livestreams': '#E91E63', 'Photos': '#4361EE', 'Reels': '#7209B7', 'Videos': '#F72585', 'Other': '#9CA3AF'}
+
+                for content_type in ['Livestreams', 'Reels', 'Videos', 'Photos', 'Other']:
+                    type_data = filtered_df[filtered_df['content_category'] == content_type]['engagement']
+                    if len(type_data) > 0:
+                        fig_box.add_trace(go.Box(
+                            y=type_data,
+                            name=content_type,
+                            marker_color=colors.get(content_type, '#9CA3AF'),
+                            boxpoints='outliers'
+                        ))
+
+                fig_box.update_layout(
+                    title='Engagement by Content Type',
+                    yaxis_title='Engagement',
+                    height=400,
+                    showlegend=False
+                )
+                st.plotly_chart(fig_box, use_container_width=True)
+        else:
+            st.warning("Content category data not available. Please refresh data.")
+
+    # ===== CORRELATION ANALYSIS SECTION =====
+    with st.expander("📈 Correlation Analysis", expanded=False):
+        st.markdown("**Engagement metric correlations and content type performance**")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            st.markdown("##### Engagement Metric Correlations")
+            # Calculate correlation matrix for engagement metrics
+            corr_cols = ['reactions', 'comments', 'shares']
+            if all(col in filtered_df.columns for col in corr_cols):
+                corr_matrix = filtered_df[corr_cols].corr()
+
+                # Create heatmap
+                fig_corr = go.Figure(data=go.Heatmap(
+                    z=corr_matrix.values,
+                    x=['Reactions', 'Comments', 'Shares'],
+                    y=['Reactions', 'Comments', 'Shares'],
+                    colorscale='RdBu',
+                    zmid=0,
+                    text=corr_matrix.round(2).values,
+                    texttemplate='%{text}',
+                    textfont={"size": 14},
+                    hovertemplate='%{x} vs %{y}: %{z:.2f}<extra></extra>'
+                ))
+                fig_corr.update_layout(
+                    title='Correlation Heatmap',
+                    height=350
+                )
+                st.plotly_chart(fig_corr, use_container_width=True)
+
+                # Find strongest and weakest correlations (excluding diagonal)
+                corr_pairs = []
+                for i, col1_name in enumerate(corr_cols):
+                    for j, col2_name in enumerate(corr_cols):
+                        if i < j:
+                            corr_pairs.append((col1_name.title(), col2_name.title(), corr_matrix.iloc[i, j]))
+
+                if corr_pairs:
+                    strongest = max(corr_pairs, key=lambda x: abs(x[2]))
+                    st.info(f"💡 Strongest correlation: **{strongest[0]}** ↔ **{strongest[1]}** ({strongest[2]:.2f})")
+            else:
+                st.warning("Correlation data not available.")
+
+        with col2:
+            st.markdown("##### Content Type Performance")
+            if 'content_category' in filtered_df.columns:
+                # Calculate average engagement by content type
+                type_perf = filtered_df.groupby('content_category')['engagement'].mean().sort_values(ascending=True)
+
+                # Create horizontal bar chart
+                colors = {'Livestreams': '#E91E63', 'Photos': '#4361EE', 'Reels': '#7209B7', 'Videos': '#F72585', 'Other': '#9CA3AF'}
+                bar_colors = [colors.get(t, '#9CA3AF') for t in type_perf.index]
+
+                fig_perf = go.Figure(go.Bar(
+                    x=type_perf.values,
+                    y=type_perf.index,
+                    orientation='h',
+                    marker_color=bar_colors,
+                    text=[f'{v:,.0f}' for v in type_perf.values],
+                    textposition='outside'
+                ))
+                fig_perf.update_layout(
+                    title='Avg Engagement by Content Type',
+                    xaxis_title='Average Engagement',
+                    height=350
+                )
+                st.plotly_chart(fig_perf, use_container_width=True)
+
+                # Best performer insight
+                overall_avg = filtered_df['engagement'].mean()
+                best_type = type_perf.idxmax()
+                best_avg = type_perf.max()
+                pct_above = ((best_avg - overall_avg) / overall_avg * 100) if overall_avg > 0 else 0
+                st.success(f"🏆 **{best_type}** performs {pct_above:.0f}% better than average ({best_avg:,.0f} vs {overall_avg:,.0f})")
+            else:
+                st.warning("Content type performance data not available.")
 
     st.markdown("---")
 
