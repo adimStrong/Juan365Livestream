@@ -191,6 +191,6 @@ python -c "import requests; r=requests.get('https://graph.facebook.com/v21.0/481
 ---
 
 ## Last Updated
-- **Date**: December 9, 2025
+- **Date**: December 10, 2025
 - **Token Expires**: ~60 days from last refresh
 - **Note**: config.py is gitignored - token stays local only

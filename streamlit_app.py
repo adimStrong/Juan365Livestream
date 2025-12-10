@@ -985,45 +985,42 @@ def main():
     }).reset_index()
     daily_all.rename(columns={'post_id': 'post_count'}, inplace=True)
 
-    # Filter by content type - Videos (includes reels)
-    videos_df = filtered_df[filtered_df['post_type_clean'] == 'Videos']
-    daily_videos = videos_df.groupby('date').agg({
-        'reactions': 'sum',
-        'comments': 'sum',
-        'shares': 'sum',
-        'post_id': 'count'
-    }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-    if not daily_videos.empty:
-        daily_videos.rename(columns={'post_id': 'post_count'}, inplace=True)
+    # All Videos (for reference)
+    all_videos_df = filtered_df[filtered_df['post_type_clean'].isin(['Videos', 'Reels'])]
 
-    # Filter by content type - Posts (non-video content)
-    posts_df = filtered_df[filtered_df['post_type_clean'].isin(['Posts', 'Photos'])]
-    daily_posts = posts_df.groupby('date').agg({
+    # Livestreams - videos with "live" in message
+    is_livestream = all_videos_df['message'].fillna('').str.lower().str.contains('live')
+    livestream_df = all_videos_df[is_livestream]
+    daily_livestream = livestream_df.groupby('date').agg({
         'reactions': 'sum',
         'comments': 'sum',
         'shares': 'sum',
         'post_id': 'count'
-    }).reset_index() if not posts_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-    if not daily_posts.empty:
-        daily_posts.rename(columns={'post_id': 'post_count'}, inplace=True)
+    }).reset_index() if not livestream_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+    if not daily_livestream.empty:
+        daily_livestream.rename(columns={'post_id': 'post_count'}, inplace=True)
 
-    # Reels - filter by /reel/ in permalink URL (separate from regular videos)
-    # Handle both permalink_url and permalink columns
-    if 'permalink_url' in filtered_df.columns:
-        url_col = filtered_df['permalink_url'].astype(str)
-    elif 'permalink' in filtered_df.columns:
-        url_col = filtered_df['permalink'].astype(str)
-    else:
-        url_col = pd.Series([''] * len(filtered_df))
-    reels_df = filtered_df[url_col.str.contains('/reel/', case=False, na=False)]
-    daily_reels = reels_df.groupby('date').agg({
+    # Other Videos - videos without "live" in message (reels, regular videos)
+    other_videos_df = all_videos_df[~is_livestream]
+    daily_other_videos = other_videos_df.groupby('date').agg({
         'reactions': 'sum',
         'comments': 'sum',
         'shares': 'sum',
         'post_id': 'count'
-    }).reset_index() if not reels_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
-    if not daily_reels.empty:
-        daily_reels.rename(columns={'post_id': 'post_count'}, inplace=True)
+    }).reset_index() if not other_videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+    if not daily_other_videos.empty:
+        daily_other_videos.rename(columns={'post_id': 'post_count'}, inplace=True)
+
+    # Filter by content type - Photos/Images
+    photos_df = filtered_df[filtered_df['post_type_clean'] == 'Photos']
+    daily_photos = photos_df.groupby('date').agg({
+        'reactions': 'sum',
+        'comments': 'sum',
+        'shares': 'sum',
+        'post_id': 'count'
+    }).reset_index() if not photos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+    if not daily_photos.empty:
+        daily_photos.rename(columns={'post_id': 'post_count'}, inplace=True)
 
     # Create 4 charts in 2x2 grid
     col1, col2 = st.columns(2)
@@ -1071,39 +1068,39 @@ def main():
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        # Chart 2: Posts Content (Photos + Text) with post count
-        total_posts_count = len(posts_df)
+        # Chart 2: Photos/Images
+        total_photos_count = len(photos_df)
         fig2 = go.Figure()
-        if not daily_posts.empty and len(daily_posts) > 0:
+        if not daily_photos.empty and len(daily_photos) > 0:
             fig2.add_trace(go.Scatter(
-                x=daily_posts['date'], y=daily_posts['reactions'],
+                x=daily_photos['date'], y=daily_photos['reactions'],
                 name='Reactions', mode='lines',
                 line=dict(width=2, color='#F02849'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig2.add_trace(go.Scatter(
-                x=daily_posts['date'], y=daily_posts['comments'],
+                x=daily_photos['date'], y=daily_photos['comments'],
                 name='Comments', mode='lines',
                 line=dict(width=2, color='#4361EE'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig2.add_trace(go.Scatter(
-                x=daily_posts['date'], y=daily_posts['shares'],
+                x=daily_photos['date'], y=daily_photos['shares'],
                 name='Shares', mode='lines',
                 line=dict(width=2, color='#10B981'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             # Add invisible trace for post count in tooltip
             fig2.add_trace(go.Scatter(
-                x=daily_posts['date'], y=[0] * len(daily_posts),
-                name='Posts', mode='lines',
+                x=daily_photos['date'], y=[0] * len(daily_photos),
+                name='Photos', mode='lines',
                 line=dict(width=0, color='rgba(0,0,0,0)'),
-                customdata=daily_posts['post_count'],
-                hovertemplate='📝 Posts: %{customdata}<extra></extra>',
+                customdata=daily_photos['post_count'],
+                hovertemplate='Photos: %{customdata}<extra></extra>',
                 showlegend=False
             ))
         fig2.update_layout(
-            title=f'📝 Posts Content ({total_posts_count:,} posts)',
+            title=f'Photos/Images ({total_photos_count:,})',
             xaxis_title='Date',
             yaxis_title='Count',
             height=350,
@@ -1115,38 +1112,38 @@ def main():
     col3, col4 = st.columns(2)
 
     with col3:
-        # Chart 3: Videos Content
-        total_videos_count = len(videos_df)
+        # Chart 3: Livestreams (videos with "live" in message)
+        total_livestream_count = len(livestream_df)
         fig3 = go.Figure()
-        if not daily_videos.empty and len(daily_videos) > 0:
+        if not daily_livestream.empty and len(daily_livestream) > 0:
             fig3.add_trace(go.Scatter(
-                x=daily_videos['date'], y=daily_videos['reactions'],
+                x=daily_livestream['date'], y=daily_livestream['reactions'],
                 name='Reactions', mode='lines',
                 line=dict(width=2, color='#F02849'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig3.add_trace(go.Scatter(
-                x=daily_videos['date'], y=daily_videos['comments'],
+                x=daily_livestream['date'], y=daily_livestream['comments'],
                 name='Comments', mode='lines',
                 line=dict(width=2, color='#4361EE'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig3.add_trace(go.Scatter(
-                x=daily_videos['date'], y=daily_videos['shares'],
+                x=daily_livestream['date'], y=daily_livestream['shares'],
                 name='Shares', mode='lines',
                 line=dict(width=2, color='#10B981'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig3.add_trace(go.Scatter(
-                x=daily_videos['date'], y=[0] * len(daily_videos),
-                name='Videos', mode='lines',
+                x=daily_livestream['date'], y=[0] * len(daily_livestream),
+                name='Livestreams', mode='lines',
                 line=dict(width=0, color='rgba(0,0,0,0)'),
-                customdata=daily_videos['post_count'],
-                hovertemplate='Videos: %{customdata}<extra></extra>',
+                customdata=daily_livestream['post_count'],
+                hovertemplate='Livestreams: %{customdata}<extra></extra>',
                 showlegend=False
             ))
         fig3.update_layout(
-            title=f'🎥 Videos Content ({total_videos_count:,} videos)',
+            title=f'Livestreams ({total_livestream_count:,})',
             xaxis_title='Date',
             yaxis_title='Count',
             height=350,
@@ -1156,38 +1153,38 @@ def main():
         st.plotly_chart(fig3, use_container_width=True)
 
     with col4:
-        # Chart 4: Videos Content (Livestreams and Videos)
-        total_videos_count = len(videos_df)
+        # Chart 4: Other Videos (non-livestream videos/reels)
+        total_other_videos_count = len(other_videos_df)
         fig4 = go.Figure()
-        if not daily_videos.empty and len(daily_videos) > 0:
+        if not daily_other_videos.empty and len(daily_other_videos) > 0:
             fig4.add_trace(go.Scatter(
-                x=daily_videos['date'], y=daily_videos['reactions'],
+                x=daily_other_videos['date'], y=daily_other_videos['reactions'],
                 name='Reactions', mode='lines',
                 line=dict(width=2, color='#F02849'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig4.add_trace(go.Scatter(
-                x=daily_videos['date'], y=daily_videos['comments'],
+                x=daily_other_videos['date'], y=daily_other_videos['comments'],
                 name='Comments', mode='lines',
                 line=dict(width=2, color='#4361EE'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig4.add_trace(go.Scatter(
-                x=daily_videos['date'], y=daily_videos['shares'],
+                x=daily_other_videos['date'], y=daily_other_videos['shares'],
                 name='Shares', mode='lines',
                 line=dict(width=2, color='#10B981'),
                 hovertemplate='%{y:,}<extra></extra>'
             ))
             fig4.add_trace(go.Scatter(
-                x=daily_videos['date'], y=[0] * len(daily_videos),
-                name='Videos', mode='lines',
+                x=daily_other_videos['date'], y=[0] * len(daily_other_videos),
+                name='Other Videos', mode='lines',
                 line=dict(width=0, color='rgba(0,0,0,0)'),
-                customdata=daily_videos['post_count'],
-                hovertemplate='Videos: %{customdata}<extra></extra>',
+                customdata=daily_other_videos['post_count'],
+                hovertemplate='Other Videos: %{customdata}<extra></extra>',
                 showlegend=False
             ))
         fig4.update_layout(
-            title=f'📹 Videos/Livestreams ({total_videos_count:,} videos)',
+            title=f'Other Videos/Reels ({total_other_videos_count:,})',
             xaxis_title='Date',
             yaxis_title='Count',
             height=350,
