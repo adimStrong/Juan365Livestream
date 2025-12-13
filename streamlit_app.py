@@ -12,6 +12,8 @@ from pathlib import Path
 import base64
 import json
 import requests
+import gspread
+from google.oauth2.service_account import Credentials
 
 # Try to load config - supports both local config.py and Streamlit secrets
 def get_credentials():
@@ -258,6 +260,126 @@ def get_cache_key():
     if csv_file.exists():
         mtime = max(mtime, int(csv_file.stat().st_mtime))
     return mtime
+
+
+# Google Sheets scraper data config
+SCRAPER_SHEET_ID = '1GB-FfBOykCuXUwbz6Mpp7-JyWSMgK-5jtoPc3xV86_w'
+SCRAPER_CREDENTIALS_FILE = Path(__file__).parent.parent / 'fb_video_scraper' / 'credentials.json'
+
+
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
+def load_scraped_data_from_sheets():
+    """
+    Load scraped video data from Google Sheets.
+    Returns DataFrame with columns: content_creator, video_link, reactions, comments, shares, views, platform
+    """
+    try:
+        # Check for credentials file
+        creds_path = SCRAPER_CREDENTIALS_FILE
+        if not creds_path.exists():
+            # Try alternate location
+            creds_path = Path(__file__).parent / 'credentials.json'
+            if not creds_path.exists():
+                st.sidebar.warning("Scraper credentials not found")
+                return pd.DataFrame()
+
+        # Authenticate
+        scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+        creds = Credentials.from_service_account_file(str(creds_path), scopes=scopes)
+        client = gspread.authorize(creds)
+
+        # Open spreadsheet
+        spreadsheet = client.open_by_key(SCRAPER_SHEET_ID)
+
+        all_data = []
+
+        # Process all sheets
+        for sheet in spreadsheet.worksheets():
+            try:
+                all_values = sheet.get_all_values()
+                if len(all_values) < 2:
+                    continue
+
+                # Find header row
+                header_row_idx = 0
+                for idx, row in enumerate(all_values):
+                    row_text = ' '.join(row).lower()
+                    if 'link' in row_text or 'url' in row_text:
+                        header_row_idx = idx
+                        break
+
+                header = all_values[header_row_idx]
+
+                # Auto-detect columns
+                columns = {}
+                for idx, col in enumerate(header):
+                    col_lower = col.lower().strip()
+                    if 'video' in col_lower and 'link' in col_lower:
+                        columns['video_link'] = idx
+                    elif 'link' in col_lower and 'video_link' not in columns:
+                        columns['video_link'] = idx
+                    elif 'url' in col_lower and 'video_link' not in columns:
+                        columns['video_link'] = idx
+                    if 'reaction' in col_lower or 'like' in col_lower:
+                        columns['reactions'] = idx
+                    if 'comment' in col_lower:
+                        columns['comments'] = idx
+                    if 'share' in col_lower:
+                        columns['shares'] = idx
+                    if 'view' in col_lower or 'play' in col_lower:
+                        columns['views'] = idx
+                    if 'creator' in col_lower or 'name' in col_lower or idx == 0:
+                        if 'content_creator' not in columns:
+                            columns['content_creator'] = idx
+
+                if columns.get('video_link') is None:
+                    continue
+
+                # Parse data rows
+                for row in all_values[header_row_idx + 1:]:
+                    if len(row) <= columns.get('video_link', 0):
+                        continue
+
+                    video_link = row[columns['video_link']].strip() if columns.get('video_link') is not None else ''
+                    if not video_link or 'http' not in video_link.lower():
+                        continue
+
+                    # Determine platform
+                    platform = 'Unknown'
+                    if 'facebook.com' in video_link.lower() or 'fb.com' in video_link.lower():
+                        platform = 'Facebook'
+                    elif 'tiktok.com' in video_link.lower():
+                        platform = 'TikTok'
+
+                    # Parse numeric values
+                    def parse_int(val):
+                        try:
+                            return int(str(val).replace(',', '').strip()) if val else 0
+                        except:
+                            return 0
+
+                    data_row = {
+                        'content_creator': row[columns.get('content_creator', 0)] if columns.get('content_creator') is not None and len(row) > columns.get('content_creator', 0) else '',
+                        'video_link': video_link,
+                        'reactions': parse_int(row[columns['reactions']] if columns.get('reactions') is not None and len(row) > columns['reactions'] else 0),
+                        'comments': parse_int(row[columns['comments']] if columns.get('comments') is not None and len(row) > columns['comments'] else 0),
+                        'shares': parse_int(row[columns['shares']] if columns.get('shares') is not None and len(row) > columns['shares'] else 0),
+                        'views': parse_int(row[columns['views']] if columns.get('views') is not None and len(row) > columns['views'] else 0),
+                        'platform': platform,
+                        'sheet_name': sheet.title
+                    }
+                    all_data.append(data_row)
+
+            except Exception as e:
+                continue
+
+        if all_data:
+            return pd.DataFrame(all_data)
+        return pd.DataFrame()
+
+    except Exception as e:
+        st.sidebar.error(f"Error loading scraped data: {str(e)[:50]}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
 def load_api_data(_cache_key=None):
@@ -546,6 +668,9 @@ def main():
     # Pass cache_key to invalidate cache when files change
     page_info, posts_data, videos_data, all_posts_data, stories_data = load_api_data(_cache_key=get_cache_key())
 
+    # Load scraped data from Google Sheets (Facebook + TikTok views)
+    scraped_df = load_scraped_data_from_sheets()
+
     # PRIMARY: Use API data for posts (most complete, real-time engagement data)
     # API has 552 posts with reactions, comments, shares breakdown
     if all_posts_data.get('posts'):
@@ -652,6 +777,12 @@ def main():
     # Show data source info
     data_source = "API Cache" if all_posts_data.get('posts') else "CSV"
     st.sidebar.success(f"📊 Loaded {len(df):,} posts from {data_source}")
+
+    # Show scraped data info
+    if not scraped_df.empty:
+        fb_count = len(scraped_df[scraped_df['platform'] == 'Facebook'])
+        tiktok_count = len(scraped_df[scraped_df['platform'] == 'TikTok'])
+        st.sidebar.info(f"🔗 Scraped: {fb_count} FB + {tiktok_count} TikTok videos")
 
     # Sidebar filters
     st.sidebar.markdown("## 🎛️ Filters")
@@ -1430,8 +1561,9 @@ def main():
 
     st.markdown("---")
 
-    # ===== TOP VIDEOS SECTION (NEW!) =====
-    st.markdown("### 🎬 Top 10 Videos by Views")
+    # ===== TOP VIDEOS SECTION - FACEBOOK (Page Videos from API) =====
+    st.markdown("### 🎬 Top 10 Facebook Page Videos by Views")
+    st.caption("*From Facebook Graph API - Page video uploads*")
 
     videos = videos_data.get('videos', [])
     if videos:
@@ -1459,7 +1591,92 @@ def main():
             }
         )
     else:
-        st.info("No video data available.")
+        st.info("No Facebook page video data available.")
+
+    # ===== TOP SCRAPED FACEBOOK VIDEOS (from scraper) =====
+    if not scraped_df.empty:
+        fb_scraped = scraped_df[scraped_df['platform'] == 'Facebook'].copy()
+        fb_scraped = fb_scraped[fb_scraped['views'] > 0].sort_values('views', ascending=False).head(10)
+
+        if not fb_scraped.empty:
+            st.markdown("### 📹 Top 10 Scraped Facebook Videos by Views")
+            st.caption("*From scraper - Reels, shared videos, and posts*")
+
+            display_fb_scraped = fb_scraped[['content_creator', 'video_link', 'views', 'reactions', 'comments', 'shares']].copy()
+            display_fb_scraped.columns = ['Creator', 'Link', 'Views', 'Reactions', 'Comments', 'Shares']
+
+            # Format numbers
+            for col in ['Views', 'Reactions', 'Comments', 'Shares']:
+                display_fb_scraped[col] = display_fb_scraped[col].apply(lambda x: f"{int(x):,}")
+
+            st.dataframe(
+                display_fb_scraped,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Link": st.column_config.LinkColumn("Link", display_text="View →")
+                }
+            )
+
+    # ===== TOP TIKTOK VIDEOS (from scraper) =====
+    if not scraped_df.empty:
+        tiktok_scraped = scraped_df[scraped_df['platform'] == 'TikTok'].copy()
+        tiktok_scraped = tiktok_scraped[tiktok_scraped['views'] > 0].sort_values('views', ascending=False).head(10)
+
+        if not tiktok_scraped.empty:
+            st.markdown("### 🎵 Top 10 TikTok Videos by Views")
+            st.caption("*From scraper - TikTok video performance*")
+
+            display_tiktok = tiktok_scraped[['content_creator', 'video_link', 'views', 'reactions', 'comments', 'shares']].copy()
+            display_tiktok.columns = ['Creator', 'Link', 'Views', 'Likes', 'Comments', 'Shares']
+
+            # Format numbers
+            for col in ['Views', 'Likes', 'Comments', 'Shares']:
+                display_tiktok[col] = display_tiktok[col].apply(lambda x: f"{int(x):,}")
+
+            st.dataframe(
+                display_tiktok,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Link": st.column_config.LinkColumn("Link", display_text="View →")
+                }
+            )
+
+            # Show TikTok summary stats
+            total_tiktok = scraped_df[scraped_df['platform'] == 'TikTok']
+            if not total_tiktok.empty:
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total TikTok Videos", f"{len(total_tiktok):,}")
+                with col2:
+                    st.metric("Total TikTok Views", f"{total_tiktok['views'].sum():,}")
+                with col3:
+                    st.metric("Total TikTok Likes", f"{total_tiktok['reactions'].sum():,}")
+                with col4:
+                    st.metric("Avg Views/Video", f"{total_tiktok['views'].mean():,.0f}")
+        else:
+            # Show TikTok section even if no views (with engagement data)
+            tiktok_all = scraped_df[scraped_df['platform'] == 'TikTok'].copy()
+            if not tiktok_all.empty:
+                st.markdown("### 🎵 Top 10 TikTok Videos by Engagement")
+                st.caption("*From scraper - TikTok video performance (views not available, sorted by likes)*")
+
+                tiktok_all = tiktok_all.sort_values('reactions', ascending=False).head(10)
+                display_tiktok = tiktok_all[['content_creator', 'video_link', 'reactions', 'comments', 'shares']].copy()
+                display_tiktok.columns = ['Creator', 'Link', 'Likes', 'Comments', 'Shares']
+
+                for col in ['Likes', 'Comments', 'Shares']:
+                    display_tiktok[col] = display_tiktok[col].apply(lambda x: f"{int(x):,}")
+
+                st.dataframe(
+                    display_tiktok,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Link": st.column_config.LinkColumn("Link", display_text="View →")
+                    }
+                )
 
     st.markdown("---")
 
