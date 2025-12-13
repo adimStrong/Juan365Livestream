@@ -7,3 +7,4 @@ requests>=2.31.0
 # Automation (for auto_download_csv.py)
 # Note: After installing playwright, run: playwright install chromium
 playwright>=1.40.0
+gspread>=5.12.0
